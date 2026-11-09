@@ -1,0 +1,59 @@
+{
+  "name": "oh-my-herdr",
+  "version": "0.3.0",
+  "herdrVersion": "0.1.14",
+  "mods": [
+    {
+      "name": "open-with",
+      "source": "mods/open-with",
+      "version": "0.5.0",
+      "license": "Mixed; see provenance",
+      "provenance": {
+        "originalLicense": "Apache-2.0",
+        "origin": "Maintained workspace source; matches runtime source at import.",
+        "branding": "icons/NOTICE.txt; local use only, public redistribution not cleared.",
+        "merged": {
+          "origin": "Local runtime mods/open-vscode snapshot imported in 0.1.0; merged into open-with in 0.3.0.",
+          "license": "No license file present in the imported open-vscode snapshot."
+        }
+      }
+    },
+    {
+      "name": "professional-status",
+      "source": "mods/professional-status",
+      "provenance": {
+        "origin": "Professional layout adapter; status summary and palette hint derived from workspace-status 0.1.14.",
+        "clonedFrom": { "name": "workspace-status", "version": "0.1.14" }
+      }
+    },
+    {
+      "name": "git-graph",
+      "source": "mods/git-graph",
+      "upstream": "https://github.com/rabeeh-ta/herdr-git-graph",
+      "license": "MIT",
+      "provenance": {
+        "origin": "Local runtime mods/git-graph-main snapshot.",
+        "observedVersion": "0.3.2",
+        "versionEvidence": "Runtime update.js VERSION; updater excluded from bundle.",
+        "copyright": "Copyright (c) 2026 Rabeeh T A",
+        "changes": [
+          "Removed standalone updater, release network checks, prompt, and update UI.",
+          "Targeted list zoom behavior to Herdr Desktop 0.1.14.",
+          "Consolidated the newer git-graph-main snapshot into the canonical git-graph Mod; retained checkout disambiguation and prewarm behavior."
+        ]
+      }
+    }
+  ],
+  "layouts": [
+    {
+      "name": "Professional",
+      "source": "layouts/professional/Professional.json",
+      "preview": "layouts/professional/Professional.svg"
+    }
+  ],
+  "provenance": {
+    "importedAt": "2026-11-09",
+    "distribution": "Local use only; bundled product branding has no cleared public redistribution grant.",
+    "sourcePolicy": "Maintained workspace sources take precedence. Imported runtime snapshots are not claimed to match an upstream tag or commit."
+  }
+}

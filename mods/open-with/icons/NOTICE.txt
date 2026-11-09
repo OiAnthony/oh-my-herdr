@@ -1,0 +1,42 @@
+Open With icon provenance
+Retrieved/extracted: 2026-11-09
+
+vscode.png
+  Source: installed Visual Studio Code.app/Contents/Resources/Code.icns
+  Vendor: Microsoft; application bundle com.microsoft.VSCode.
+finder.png
+  Source: macOS Finder.app/Contents/Resources/Finder.icns
+  Vendor: Apple; application bundle com.apple.finder.
+zed.png
+  Source: installed Zed.app/Contents/Resources/Zed.icns
+  Vendor: Zed Industries; application bundle dev.zed.Zed.
+idea.png
+  Source: installed IntelliJ IDEA.app/Contents/Resources/idea.icns
+  Vendor: JetBrains; application bundle com.jetbrains.intellij.
+  All four PNGs were converted directly from the installed ICNS resources
+  with macOS sips, resized to 64 x 64. No replacement logos were drawn.
+  Extraction does not grant a redistribution license. These product logos
+  retain their respective owners' copyright and trademark rights; they
+  are NOT covered by the Mod's code license. Review the vendors' applicable
+  brand/resource terms before public redistribution. No endorsement implied.
+
+cursor.svg
+  Source: https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/cursor.svg
+  Collection: Simple Icons, CC0 1.0 Universal.
+  Changes: explicit neutral fill (#d8d8d8); provenance comment added.
+sublime.svg
+  Source: https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/sublimetext.svg
+  Collection: Simple Icons, CC0 1.0 Universal.
+  Changes: explicit orange fill (#ff9800); provenance comment added.
+  License: https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
+  Legal text: https://creativecommons.org/publicdomain/zero/1.0/legalcode
+  CC0 does not waive trademark or patent rights, and does not clear
+  third-party rights. Brand owners retain their respective rights.
+
+application.svg
+  Original generic application-window illustration for this Mod, under
+  the Mod's code license. This is only the fallback for custom entries,
+  not a substitute for any default application's real logo.
+
+All runtime resources are bundled locally. No runtime network retrieval
+or installed application bundle access is required to render these icons.

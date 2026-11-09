@@ -1,0 +1,6 @@
+{
+  "title": "Open With",
+  "version": "0.5.0",
+  "place": "none",
+  "overlay": { "kind": "popup", "width": 360, "height": 460 }
+}

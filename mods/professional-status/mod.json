@@ -1,0 +1,5 @@
+{
+  "place": "none",
+  "title": "Professional statusline",
+  "cloned_from": { "name": "workspace-status", "version": "0.1.14" }
+}
