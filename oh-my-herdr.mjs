@@ -67,6 +67,75 @@ async function bytesAt(root, relative) {
   return fs.readFile(path);
 }
 
+function bindingList(value, fields) {
+  if (!Array.isArray(value)) throw new Error("Invalid keybinding list");
+  const seen = new Set();
+  for (const binding of value) {
+    if (!binding || typeof binding !== "object" || Array.isArray(binding)
+        || !/^(global|terminal|(?:layout|mod):[a-zA-Z0-9_-]+)$/.test(binding.section)
+        || typeof binding.key !== "string" || !binding.key.trim() || binding.key === "ctrl-alt-shift-escape"
+        || fields.some(field => binding[field] !== null && (typeof binding[field] !== "string" || !binding[field].trim()))) {
+      throw new Error("Invalid keybinding entry");
+    }
+    const id = JSON.stringify([binding.section, binding.key]);
+    if (seen.has(id)) throw new Error(`Duplicate keybinding: ${binding.section}.${binding.key}`);
+    seen.add(id);
+  }
+  return value;
+}
+
+async function planKeys(home, previous, rules, uninstalling = false) {
+  if (!previous.length && !rules.length) return { bindings: [], warnings: [] };
+  const before = await bytesAt(home, "keys.json");
+  if (!before) throw new Error("Missing keys.json; start Herdr with this app home before installing or restoring shortcuts");
+  const keys = JSON.parse(before);
+  if (!keys || typeof keys !== "object" || Array.isArray(keys)
+      || Object.values(keys).some(section => !section || typeof section !== "object" || Array.isArray(section))) {
+    throw new Error("Invalid keys.json sections");
+  }
+  const get = (section, key) => {
+    if (!Object.hasOwn(keys, section) || !Object.hasOwn(keys[section], key)) return null;
+    const value = keys[section][key];
+    if (value === null) throw new Error(`Invalid keybinding: ${section}.${key}`);
+    return value;
+  };
+  let changed = false;
+  const set = (section, key, value) => {
+    if (get(section, key) === value) return;
+    changed = true;
+    if (value === null) delete keys[section][key];
+    else {
+      if (!Object.hasOwn(keys, section)) Object.defineProperty(keys, section, { value: {}, enumerable: true });
+      Object.defineProperty(keys[section], key, { value, enumerable: true, configurable: true, writable: true });
+    }
+  };
+  const pending = new Map(rules.map(rule => [JSON.stringify([rule.section, rule.key]), rule]));
+  const bindings = [], warnings = [];
+  for (const entry of previous) {
+    const { section, key } = entry;
+    if (get(section, key) !== entry.after) {
+      const message = `Managed keybinding edited or deleted: ${section}.${key}`;
+      if (!uninstalling) throw new Error(`${message}; no files were changed`);
+      warnings.push(`${message}; kept the current binding`);
+      continue;
+    }
+    const id = JSON.stringify([section, key]), rule = pending.get(id);
+    set(section, key, rule ? rule.to : entry.before);
+    if (rule) bindings.push({ section, key, before: entry.before, after: rule.to });
+    pending.delete(id);
+  }
+  for (const { section, key, from, to } of pending.values()) {
+    const original = get(section, key);
+    if (original !== null && original !== from && original !== to) {
+      throw new Error(`Unowned keybinding conflict: ${section}.${key}; no files were changed`);
+    }
+    set(section, key, to);
+    bindings.push({ section, key, before: original, after: to });
+  }
+  const operation = changed ? { path: "keys.json", before, after: Buffer.from(`${JSON.stringify(keys, null, 2)}\n`) } : null;
+  return { bindings, warnings, operation, guard: changed ? null : { path: "keys.json", before } };
+}
+
 export async function loadBundle(root = ROOT) {
   root = resolve(root);
   const raw = await bytesAt(root, "oh-my-herdr.json");
@@ -76,6 +145,9 @@ export async function loadBundle(root = ROOT) {
       || manifest.herdrVersion !== "0.1.14" || !Array.isArray(manifest.mods) || !Array.isArray(manifest.layouts)) {
     throw new Error("Invalid oh-my-herdr manifest");
   }
+  const keyBytes = await bytesAt(root, "keybindings.json");
+  if (!keyBytes) throw new Error("Missing keybindings.json");
+  const keybindings = bindingList(JSON.parse(keyBytes), ["from", "to"]);
   const files = new Map();
   const mods = new Set();
   const layouts = new Set();
@@ -114,20 +186,21 @@ export async function loadBundle(root = ROOT) {
     await add(layout.preview, `layouts/${layout.name}.svg`);
   }
   if (mods.size !== MODS.size || layouts.size !== LAYOUTS.size) throw new Error("Incomplete suite manifest");
-  return { manifest, files, mods, layouts };
+  return { manifest, files, mods, layouts, keybindings };
 }
 
 async function readRecord(home) {
   const bytes = await bytesAt(home, RECORD);
-  if (!bytes) return { bytes: null, files: {} };
+  if (!bytes) return { bytes: null, files: {}, keybindings: [] };
   const record = JSON.parse(bytes);
-  if (record.name !== "oh-my-herdr" || record.schemaVersion !== 1 || typeof record.version !== "string"
+  if (!record || record.name !== "oh-my-herdr" || ![1, 2].includes(record.schemaVersion) || typeof record.version !== "string"
       || !record.files || typeof record.files !== "object" || Array.isArray(record.files)) throw new Error("Invalid ownership record");
+  const keybindings = record.schemaVersion === 2 ? bindingList(record.keybindings, ["before", "after"]) : [];
   for (const [path, hash] of Object.entries(record.files)) {
     ownedPath(path, OWNED_MODS);
     if (typeof hash !== "string" || !/^[a-f0-9]{64}$/.test(hash)) throw new Error(`Invalid ownership hash: ${path}`);
   }
-  return { bytes, files: record.files };
+  return { bytes, files: record.files, keybindings };
 }
 
 async function preflight(home, record, desired) {
@@ -159,7 +232,7 @@ async function ensureDirectory(path, created) {
 }
 
 // Staging and backups never appear under watched mods/ or layouts/.
-async function transact(home, operations, beforeCommit) {
+async function transact(home, operations, beforeCommit, guards = []) {
   if (!operations.length) return;
   const created = [];
   const applied = [];
@@ -177,7 +250,7 @@ async function transact(home, operations, beforeCommit) {
       if (operation.before !== null) await fs.writeFile(operation.backup, operation.before, { flag: "wx" });
     }
     // A second full pass detects edits made while staging, before any deployed write.
-    for (const operation of operations) {
+    for (const operation of [...operations, ...guards]) {
       const now = await bytesAt(home, operation.path);
       if (now === null ? operation.before !== null : operation.before === null || !now.equals(operation.before)) {
         throw new Error(`File changed during staging: ${operation.path}`);
@@ -188,6 +261,10 @@ async function transact(home, operations, beforeCommit) {
       const target = await safePath(home, operation.path);
       await ensureDirectory(dirname(target), created);
       if (beforeCommit) await beforeCommit({ index, path: operation.path });
+      for (const guard of guards) {
+        const now = await bytesAt(home, guard.path);
+        if (!now || !now.equals(guard.before)) throw new Error(`File changed during commit: ${guard.path}`);
+      }
       // Check again immediately before each mutation, including fault-injection hooks.
       const now = await bytesAt(home, operation.path);
       if (now === null ? operation.before !== null : operation.before === null || !now.equals(operation.before)) {
@@ -232,6 +309,7 @@ export async function install(home, { sourceRoot = ROOT, beforeCommit } = {}) {
   const bundle = await loadBundle(sourceRoot);
   const record = await readRecord(home);
   const snapshots = await preflight(home, record, bundle.files);
+  const keys = await planKeys(home, record.keybindings, bundle.keybindings);
   const operations = [];
   const legacyHosts = Object.hasOwn(record.files, "mods/open-vscode/main.js")
     ? await bytesAt(home, "mods/open-vscode/hosts.json") : null;
@@ -247,10 +325,11 @@ export async function install(home, { sourceRoot = ROOT, beforeCommit } = {}) {
   for (const path of Object.keys(record.files)) {
     if (!bundle.files.has(path)) operations.push({ path, before: snapshots.get(path), after: null });
   }
-  const after = Buffer.from(`${JSON.stringify({ schemaVersion: 1, name: "oh-my-herdr", version: bundle.manifest.version,
-    files: Object.fromEntries([...bundle.files].map(([path, file]) => [path, file.sha256])) }, null, 2)}\n`);
+  if (keys.operation) operations.push(keys.operation);
+  const after = Buffer.from(`${JSON.stringify({ schemaVersion: 2, name: "oh-my-herdr", version: bundle.manifest.version,
+    files: Object.fromEntries([...bundle.files].map(([path, file]) => [path, file.sha256])), keybindings: keys.bindings }, null, 2)}\n`);
   if (!record.bytes || !record.bytes.equals(after)) operations.push({ path: RECORD, before: record.bytes, after });
-  await transact(home, operations, beforeCommit);
+  await transact(home, operations, beforeCommit, keys.guard ? [keys.guard] : []);
   return { home, files: bundle.files.size };
 }
 
@@ -258,16 +337,25 @@ export async function uninstall(home, { beforeCommit } = {}) {
   home = resolve(home);
   const record = await readRecord(home);
   const snapshots = await preflight(home, record, new Map());
+  const keys = await planKeys(home, record.keybindings, [], true);
   const operations = Object.keys(record.files).map(path => ({ path, before: snapshots.get(path), after: null }));
+  if (keys.operation) operations.push(keys.operation);
   if (record.bytes) operations.push({ path: RECORD, before: record.bytes, after: null });
-  await transact(home, operations, beforeCommit);
-  return { home, files: operations.length - (record.bytes ? 1 : 0) };
+  await transact(home, operations, beforeCommit, keys.guard ? [keys.guard] : []);
+  return { home, files: Object.keys(record.files).length, warnings: keys.warnings };
 }
 
 async function validateDeployment(home, bundle) {
   const record = await readRecord(home);
   if (!record.bytes) throw new Error("Suite is not installed (missing ownership record)");
   await preflight(home, record, bundle.files);
+  const keys = await planKeys(home, record.keybindings, bundle.keybindings);
+  const installed = new Map(record.keybindings.map(entry => [JSON.stringify([entry.section, entry.key]), entry.after]));
+  if (keys.operation || installed.size !== bundle.keybindings.length
+      || bundle.keybindings.some(rule => !installed.has(JSON.stringify([rule.section, rule.key]))
+        || installed.get(JSON.stringify([rule.section, rule.key])) !== rule.to)) {
+    throw new Error("Keybindings differ from suite; install the current suite first");
+  }
   if (Object.keys(record.files).length !== bundle.files.size) throw new Error("Deployment contains obsolete ownership; install the current suite first");
   for (const [path, file] of bundle.files) {
     const bytes = await bytesAt(home, path);
@@ -359,6 +447,7 @@ export async function main(argv = process.argv.slice(2)) {
     throw new Error("Usage: node oh-my-herdr.mjs install|check|uninstall [app-home] (no force option)");
   }
   const result = await ({ install, check, uninstall })[command](resolveHome(argument));
+  for (const warning of result.warnings ?? []) console.error(`Warning: ${warning}`);
   console.log(`${command}: ${result.home}; ${result.files ?? result.mods} ${command === "check" ? "mods checked" : "owned files"}. No layout was switched.`);
 }
 

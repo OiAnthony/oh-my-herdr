@@ -2,7 +2,7 @@
 
 一个包含布局、两个独立功能 Mods 和一个布局适配 Mod 的 Herdr Desktop 扩展项目。当前版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.14`。
 
-源码统一放在 `desktop/extensions/oh-my-herdr/`，项目内包含 `layouts/`、`mods/`、安装脚本和文档。它不是单个带路由器的 Mod；运行时仍部署为 Herdr 原生的多个 Mod 目录。不修改 Herdr 本体、内置 Mods、内置布局或快捷键。
+源码统一放在 `desktop/extensions/oh-my-herdr/`，项目内包含 `layouts/`、`mods/`、快捷键预设、安装脚本和文档。它不是单个带路由器的 Mod；运行时仍部署为 Herdr 原生的多个 Mod 目录。不修改 Herdr 本体、内置 Mods 或内置布局；安装器按绑定合并快捷键，不覆盖整份个人配置。
 
 ## 安装与启用
 
@@ -15,7 +15,7 @@ node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs install
 node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs check
 ```
 
-`install` 部署组件并记录文件归属，不切换布局。`check` 检查部署文件、布局引用和静态资源，并对每个 Mod 执行 `herdr-app check`。成功后，手动选择布局：
+`install` 部署组件、合并快捷键并记录归属，不切换布局。`check` 检查部署文件、受管快捷键、布局引用和静态资源，并对每个 Mod 执行 `herdr-app check`。成功后，手动选择布局：
 
 ```sh
 herdr-app do layout.switch '{"name":"Professional"}'
@@ -62,16 +62,6 @@ Git Graph 位于终端及右侧面板下方、状态栏上方，默认收起。�
 
 未初始化的 submodules 不显示，也不会自动初始化、更新或 fetch。没有 submodules 的普通仓库保持原样；非 Git 目录继续使用 Manygit 扫描。仓库列表在刷新历史时重新发现，打开选择器时重新读取各仓库状态。选择其他 submodule 不会改变终端 cwd 或内置 Changes 的目标。
 
-个人快捷键可在应用目录的 `keys.json` 中合并以下区块；安装器不修改快捷键。仅在 Professional 布局中，连续按两次 `⌘⇧G` 切换 Git Graph 的显示与隐藏；单次不切换面板，现有 `⌘G` 不变。这里使用 Herdr 原生的空格分隔按键序列，不需要新增 Mod。
-
-```json
-"layout:Professional": {
-  "cmd-shift-g cmd-shift-g": "layout.toggle:graph-panel"
-}
-```
-
-`keys.json` 自定义后不会自动合入新版默认快捷键，后续新增默认绑定需要手动合并。
-
 点击 commit 行，在该行下方展开详情；再次点击收起，点击另一条则切换展开项。左侧显示 Commit、Parents、Author、Committer、Date 和提交说明，右侧按目录显示变更文件及增删统计。窄面板改为上下排列。展开项与提交列表共用滚动区域，后续提交顺延，图线跨过展开区继续连接。Esc 或详情右上角的关闭按钮也可收起。
 
 单击变更文件会打开只读 diff 预览 tab，每个 space 最多保留一个可替换的预览。单击其他文件时，更新同一个 tab 的内容和名称，不关闭重建。双击文件会固定该 tab，后续单击会另开预览，不覆盖固定项；再次打开已固定的同一文件、仓库、机器和 commit，会切回原 tab。预览 tab 的名称带 `Preview`，固定后移除该前缀。使用标准 tab 关闭按钮关闭。
@@ -84,11 +74,45 @@ diff pane title 显示相对路径，完整标题可通过悬停查看。普通�
 
 Graph 的 Changes 跳转只在布局显式提供绑定且目标与内置 Changes 一致时显示；独立 pane、异仓库或 Manygit 子仓库不会误跳到当前窗口的另一个仓库。
 
+## 快捷键管理
+
+`keybindings.json` 是随套件分发的 macOS 按键预设，不是运行时 Mod。修改该文件后执行 `install`，安装器将规则合并到目标应用目录的 `keys.json`。
+
+| 按键 | 安装后的行为 | 首次安装接受的原绑定 |
+| --- | --- | --- |
+| `⌘W` | `pane.close` | `tab.close`、`pane.close` 或未绑定 |
+| `⌘⇧W` | 移除绑定 | `pane.close` 或未绑定 |
+| `⌘G` | `open-with.open-default`，使用默认应用打开当前仓库或目录 | `mod.open:open-vscode`、`open-with.open-default` 或未绑定 |
+
+关闭 pane 会结束它的终端；如果它是 tab 中最后一个 pane，Herdr 仍会关闭该 tab。预设只管理上述 `global` 绑定，不清除其他位置的 `tab.close`，也不覆盖更高优先级的 `terminal` 或布局绑定。
+
+`⌘G` 与 Open With 右上角主按钮共用启动逻辑，不弹出选择菜单。它在每次触发时读取默认应用和当前目标；远程目录仍只使用 VS Code。该命令需要当前布局显示 Open With 的 `props.role: "launcher"` 实例；Professional 已包含此入口。菜单实例不监听该命令，避免菜单与主按钮重复启动。
+
+每项规则包含 `section`、`key`、`from` 和 `to`。`from` 是首次接管时允许替换的旧命令，`to` 是目标命令；两者使用字符串，`null` 表示未绑定。未绑定或已匹配目标的按键也可接管。其他个人绑定（包括带参数的命令对象）保留；发生实际修改时，安装器会重新格式化整份 JSON。
+
+- 首次安装：其他自定义值视为冲突，在任何部署写入前停止。`keys.json` 必须已由目标 Herdr 初始化，不能用局部配置替代整份默认快捷键。
+- 更新：受管绑定必须仍与上次安装值一致，否则 `install` 和 `check` 都报错。修改预设的目标值会沿用首次记录的原值；从预设移除规则会恢复其原值并解除管理。
+- 卸载：未修改的受管绑定恢复为安装前的实际值，原本未绑定的保持未绑定。个人后来改动的受管绑定保留，并输出警告；其余按键正常恢复。
+- 已匹配配置：接受并记录当前值，不推测历史默认值。因此手工改好后再首次纳管，卸载也保留这些手工设置。
+- 归属与回滚：各绑定的原值和安装值保存在 `.oh-my-herdr/installed.json`，与 Mods、布局一起事务提交；失败时恢复本次已写文件。旧版文件归属记录在安装时迁移，不伪造按键历史。配置缺失、JSON 无效或路径是符号链接时停止，不创建残缺默认配置。
+
+遇到冲突时，按错误中的 section 和按键检查个人配置。若要由套件管理，先备份，再把该项改回 `.oh-my-herdr/installed.json` 中对应的 `after` 值（`null` 表示移除该项）；首次安装则改为表中接受的值，然后重新运行 `install`。没有强制覆盖选项。
+
+Git Graph 的个人快捷键不在预设内，可在应用目录的 `keys.json` 中合并以下区块。仅在 Professional 布局中，连续按两次 `⌘⇧G` 切换 Git Graph 的显示与隐藏；单次不切换面板，现有 `⌘G` 不变。这里使用 Herdr 原生的空格分隔按键序列，不需要新增 Mod。
+
+```json
+"layout:Professional": {
+  "cmd-shift-g cmd-shift-g": "layout.toggle:graph-panel"
+}
+```
+
+`keys.json` 自定义后不会自动合入新版默认快捷键，后续新增默认绑定需要手动合并。
+
 ## 更新、接管与卸载
 
 更新源码后，再执行 `install`。它也是更新入口，不需要独立 updater。
 
-已移除 Git Graph 的 F4 源文件跳转与内部源文件预览。更新前先关闭已有的源文件预览 tab；diff 预览和固定 tab 不受影响。安装器会按归属记录移除未修改的旧 `source.js`、`source-file.js`，不修改全局快捷键。
+已移除 Git Graph 的 F4 源文件跳转与内部源文件预览。更新前先关闭已有的源文件预览 tab；diff 预览和固定 tab 不受影响。安装器会按归属记录移除未修改的旧 `source.js`、`source-file.js`。F4 功能退休不新增按键变更，安装时仅应用上述快捷键预设。
 
 - 首次安装只接管与源码逐字节一致的已有文件。其他同名文件视为冲突。
 - 后续更新依据 `.oh-my-herdr/installed.json` 中的文件哈希判断归属。本地修改或删除受管文件时，安装停止，不强制覆盖。
@@ -98,7 +122,7 @@ Graph 的 Changes 跳转只在布局显式提供绑定且目标与内置 Changes
 
 已有运行副本可能含有单独 updater 或本地修改，因此第一次整合可能报告冲突。先把冲突文件备份到应用目录之外，确认差异后再处理旧副本。不要直接清空整个 Mod 目录，也不要删除个人配置以绕过检查。
 
-从 `0.1.0` 或 `0.2.0` 升级时，安装器按旧归属记录移除未修改的 `git-graph-main`、`tabs-professional` 和 `open-vscode` 受管文件。`open-vscode` 的能力已合入 Open With，不部署旧入口或兼容别名。个人布局或快捷键中的旧引用需要改为内置 `tabs` 或 `open-with`。
+从 `0.1.0` 或 `0.2.0` 升级时，安装器按旧归属记录移除未修改的 `git-graph-main`、`tabs-professional` 和 `open-vscode` 受管文件。`open-vscode` 的能力已合入 Open With，不部署旧入口或兼容别名。安装器将原先指向 `mod.open:open-vscode` 的 `global.cmd-g` 迁移为 `open-with.open-default`；其他个人布局或快捷键中的旧引用需要手动改为内置 `tabs` 或对应的 Open With 入口。
 
 退休 `open-vscode` 时，安装器将旧 `mods/open-vscode/hosts.json` 复制到 `mods/open-with/hosts.json`，仅在新文件不存在时写入；内容相同则保留，不同则在任何写入前停止。冲突时先备份并合并两份配置，再将旧文件移到 `mods/` 之外。新配置不纳入归属记录，卸载也不删除。迁移只执行一次，后续更新不再读取旧路径。
 
@@ -111,9 +135,9 @@ herdr-app do layout.switch '{"name":"main"}'
 node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs uninstall
 ```
 
-卸载只移除归属记录中的未修改文件。遇到修改过的受管文件时停止；非受管配置、生成文件和状态保留。安装器不自动切布局，因此卸载后引用这些 Mods 的其他个人布局需要自行调整。
+卸载移除归属记录中的未修改文件，并按上述规则恢复快捷键。遇到修改过的受管文件时停止；非受管配置、生成文件和状态保留。安装器不自动切布局，因此卸载后引用这些 Mods 的其他个人布局需要自行调整。
 
-回退到旧套件版本时，使用保存的旧源码执行 `install`。更新前若存在本地修改，先在应用目录之外备份并完成合并，不使用强制覆盖。
+回退到不支持快捷键归属的旧套件版本前，先手动切回内置布局，再用当前源码执行 `uninstall`，最后使用旧源码执行 `install`。旧安装器不能直接读取新版归属记录。更新或回退前若存在本地修改，先在应用目录之外备份并完成合并，不使用强制覆盖。
 
 ## Open With 配置
 
@@ -163,6 +187,12 @@ Git Graph 的上游版权与 MIT 文本随源码保留。Open With 品牌图标�
 ## 本机验证记录
 
 ### 未发布修改
+
+2026-11-10 快捷键预设与生命周期验证：
+
+- 64 项安装器回归检查通过，覆盖合并保留、首次冲突、个人修改、规则更新与退休、旧记录迁移、卸载恢复、符号链接拒绝、并发修改检测及提交失败回滚。
+- 在隔离应用目录中，用实际 CLI 完成 `install`、`check`、`uninstall`：部署 63 个受管文件，三个 Mod 均通过 Herdr Desktop `0.1.14` 的加载检查，卸载后恢复默认按键。
+- 未安装到日常应用；验证前后日常 `keys.json` 字节一致。未触发关闭快捷键或做真实按键验收，隔离目录已清理。
 
 2026-11-10 移除 F4 源文件跳转及专用预览实现，删除对应的四项源文件预览测试。保留的 10 项 Graph 回归检查全部通过，`git-graph` 通过 `herdr-app check`。此次未更新日常安装，未在真实窗口验证移除后的按键行为。
 

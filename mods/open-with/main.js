@@ -1,6 +1,6 @@
 import { View, div, image, svg } from "gpui-kit";
 import { Button, h_flex, v_flex } from "gpui-base";
-import { appHome, closeOverlay, exec, hc, notify, openOverlay, props, readTextFile, run, shared, setShared, theme, window } from "herdr";
+import { appHome, closeOverlay, exec, hc, nextCommand, notify, openOverlay, props, readTextFile, run, shared, setShared, theme, window } from "herdr";
 import { captureTarget, resolveTarget } from "./context.js";
 import { availableApps, launch, parseApps } from "./apps.js";
 import { hostOf } from "./vscode.js";
@@ -38,10 +38,21 @@ export default class OpenWith extends View {
         this.error = error?.message ?? String(error);
       } finally { this.loading = false; cx.notify(); }
     });
+    if (this.launcher) cx.spawn(async cx => {
+      for (;;) {
+        const command = await nextCommand();
+        if (command === "open-default") this.openDefault(cx);
+      }
+    });
   }
 
   defaultApp(apps = this.apps) {
     return apps.find(app => app.id === shared(DEFAULT_KEY)) ?? apps[0];
+  }
+
+  openDefault(cx) {
+    const target = captureTarget();
+    this.choose(this.defaultApp(availableApps(this.apps, target, window()?.platform)), cx, target);
   }
 
   setDefault(index) {
@@ -103,8 +114,7 @@ export default class OpenWith extends View {
           .hover(el => el.bg(t.hover)).cursor_pointer().on_mouse_down("left", stop)
           .on_click((_event, cx) => {
             cx.stop_propagation();
-            const target = captureTarget();
-            this.choose(this.defaultApp(availableApps(this.apps, target, window()?.platform)), cx, target);
+            this.openDefault(cx);
           })
           .child(this.icon(app))
           .child(div().min_w(0).truncate().child(this.loading ? "Loading…" : this.busy ? "Opening…" : app?.title ?? "Open With")))

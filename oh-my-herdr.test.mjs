@@ -8,6 +8,12 @@ import { check, install, loadBundle, resolveHome, uninstall } from "./oh-my-herd
 
 const names = ["open-with", "professional-status", "git-graph"];
 const recordPath = ".oh-my-herdr/installed.json";
+const keybindings = [
+  { section: "global", key: "cmd-w", from: "tab.close", to: "pane.close" },
+  { section: "global", key: "cmd-shift-w", from: "pane.close", to: null },
+];
+const defaultKeys = { global: { "cmd-w": "tab.close", "cmd-shift-w": "pane.close", "cmd-t": "tab.new" },
+  terminal: { "cmd-c": "terminal.copy" }, "layout:Professional": { "cmd-shift-g cmd-shift-g": "layout.toggle:graph-panel" } };
 async function put(root, path, text) {
   await fs.mkdir(dirname(join(root, path)), { recursive: true });
   await fs.writeFile(join(root, path), text);
@@ -22,6 +28,8 @@ async function fixture(t) {
     mods: names.map(name => ({ name, source: `mods/${name}` })),
     layouts: [{ name: "Professional", source: "layouts/professional/Professional.json", preview: "layouts/professional/Professional.svg" }] };
   await put(sourceRoot, "oh-my-herdr.json", JSON.stringify(manifest));
+  await put(sourceRoot, "keybindings.json", JSON.stringify(keybindings));
+  await put(home, "keys.json", JSON.stringify(defaultKeys));
   for (const name of names) await put(sourceRoot, `mods/${name}/main.js`, `export default ${JSON.stringify(name)};\n`);
   await put(sourceRoot, "mods/open-with/icons/application.svg", "<svg></svg>");
   await put(sourceRoot, "mods/open-with/main.js", 'const icon = "mods/open-with/icons/application.svg";\n');
@@ -138,7 +146,7 @@ test("uninstall removes only unchanged owned files and its record", async t => {
   assert.deepEqual(await snapshot(home), before);
 });
 
-for (const target of ["source-root", "source-file", "destination-parent", "destination-file", "record-parent", "record-file"]) {
+for (const target of ["source-root", "source-file", "destination-parent", "destination-file", "record-parent", "record-file", "key-source", "key-destination"]) {
   test(`rejects ${target} symlink without following it`, async t => {
     const { root, sourceRoot, home, options } = await fixture(t);
     const outside = join(root, "outside");
@@ -155,7 +163,12 @@ for (const target of ["source-root", "source-file", "destination-parent", "desti
       await fs.mkdir(join(home, "mods/open-with"), { recursive: true });
       await fs.symlink(join(outside, "sentinel"), join(home, "mods/open-with/main.js"));
     } else if (target === "record-parent") await fs.symlink(outside, join(home, ".oh-my-herdr"));
-    else {
+    else if (target === "key-source" || target === "key-destination") {
+      const directory = target === "key-source" ? sourceRoot : home;
+      const name = target === "key-source" ? "keybindings.json" : "keys.json";
+      await fs.unlink(join(directory, name));
+      await fs.symlink(join(outside, "sentinel"), join(directory, name));
+    } else {
       await fs.mkdir(join(home, ".oh-my-herdr"));
       await fs.symlink(join(outside, "sentinel"), join(home, recordPath));
     }
@@ -194,6 +207,7 @@ for (const operation of ["first-install", "update", "uninstall"]) {
     if (operation === "update") {
       await put(sourceRoot, "mods/open-with/main.js", "changed\n");
       await put(sourceRoot, "mods/open-with/new.svg", "<svg></svg>");
+      await put(sourceRoot, "keybindings.json", JSON.stringify([{ ...keybindings[0], to: "pane.zoom" }]));
     }
     await put(home, "mods/open-with/icons/personal.svg", "keep");
     const before = await snapshot(home);
@@ -370,5 +384,173 @@ test("SSH host migration rolls back with retired files when record commit fails"
   await assert.rejects(install(home, { ...options, beforeCommit: ({ path }) => {
     if (path === recordPath) throw new Error("injected migration failure");
   } }), /injected migration failure/);
+  assert.deepEqual(await snapshot(home), before);
+});
+
+test("shortcut merge preserves personal bindings and uninstall restores original bindings only", async t => {
+  const { home, options } = await fixture(t);
+  const original = structuredClone(defaultKeys);
+  original.global["cmd-r"] = { command: "layout.resize", args: { id: "sidebar", px: 240 } };
+  await put(home, "keys.json", JSON.stringify(original));
+  await install(home, options);
+  const keys = JSON.parse(await fs.readFile(join(home, "keys.json")));
+  assert.deepEqual(keys, { ...original, global: { "cmd-w": "pane.close", "cmd-t": "tab.new", "cmd-r": original.global["cmd-r"] } });
+  keys.terminal["cmd-f"] = "terminal.search";
+  await put(home, "keys.json", JSON.stringify(keys));
+  await install(home, options);
+  await check(home, { ...options, runCheck: async () => ({}) });
+  await uninstall(home);
+  original.terminal["cmd-f"] = "terminal.search";
+  assert.deepEqual(JSON.parse(await fs.readFile(join(home, "keys.json"))), original);
+});
+
+test("matching personal shortcuts are adopted without inventing defaults or rewriting keys", async t => {
+  const { home, options } = await fixture(t);
+  const original = '{ "global": { "cmd-w": "pane.close" }, "terminal": { "cmd-c": "terminal.copy" } }\n';
+  await put(home, "keys.json", original);
+  await install(home, options);
+  assert.equal(await fs.readFile(join(home, "keys.json"), "utf8"), original);
+  await install(home, options);
+  await uninstall(home);
+  assert.equal(await fs.readFile(join(home, "keys.json"), "utf8"), original);
+});
+
+test("absent bindings are restored as absent rather than default bindings", async t => {
+  const { home, options } = await fixture(t);
+  await put(home, "keys.json", '{"terminal":{"cmd-c":"terminal.copy"}}');
+  await install(home, options);
+  assert.equal(JSON.parse(await fs.readFile(join(home, "keys.json"))).global["cmd-w"], "pane.close");
+  await uninstall(home);
+  const keys = JSON.parse(await fs.readFile(join(home, "keys.json")));
+  assert.deepEqual(keys, { terminal: { "cmd-c": "terminal.copy" }, global: {} });
+});
+
+for (const [key, action] of [["cmd-w", "space.close"], ["cmd-shift-w", { command: "tab.close", args: { id: "personal" } }]]) {
+  test(`first install refuses custom ${key} before deploying any files`, async t => {
+    const { home, options } = await fixture(t);
+    const keys = structuredClone(defaultKeys);
+    keys.global[key] = action;
+    await put(home, "keys.json", JSON.stringify(keys));
+    const before = await snapshot(home);
+    await assert.rejects(install(home, options), /Unowned keybinding conflict/);
+    assert.deepEqual(await snapshot(home), before);
+  });
+}
+
+for (const change of ["edited", "deleted", "removed-binding-restored"]) {
+  test(`${change} managed shortcut blocks update and check but survives uninstall`, async t => {
+    const { home, options } = await fixture(t);
+    await install(home, options);
+    const keys = JSON.parse(await fs.readFile(join(home, "keys.json")));
+    if (change === "edited") keys.global["cmd-w"] = { command: "tab.close", args: {} };
+    else if (change === "deleted") delete keys.global["cmd-w"];
+    else keys.global["cmd-shift-w"] = "pane.zoom";
+    await put(home, "keys.json", JSON.stringify(keys));
+    const before = await snapshot(home);
+    await assert.rejects(install(home, options), /Managed keybinding edited or deleted/);
+    await assert.rejects(check(home, { ...options, runCheck: async () => ({}) }), /Managed keybinding edited or deleted/);
+    assert.deepEqual(await snapshot(home), before);
+    const result = await uninstall(home);
+    const expected = structuredClone(keys);
+    if (change === "removed-binding-restored") expected.global["cmd-w"] = "tab.close";
+    else expected.global["cmd-shift-w"] = "pane.close";
+    assert.deepEqual(JSON.parse(await fs.readFile(join(home, "keys.json"))), expected);
+    assert.deepEqual(result.warnings, [`Managed keybinding edited or deleted: global.${change === "removed-binding-restored" ? "cmd-shift-w" : "cmd-w"}; kept the current binding`]);
+    await missing(join(home, recordPath));
+    await missing(join(home, "mods/open-with/main.js"));
+  });
+}
+
+test("preset updates keep the first original value and restore retired bindings", async t => {
+  const { sourceRoot, home, options } = await fixture(t);
+  await install(home, options);
+  await put(sourceRoot, "keybindings.json", JSON.stringify([
+    { ...keybindings[0], to: "pane.zoom" },
+    { section: "global", key: "cmd-t", from: "tab.new", to: "space.new" },
+  ]));
+  const before = await snapshot(home);
+  await assert.rejects(check(home, { ...options, runCheck: async () => ({}) }), /Keybindings differ from suite/);
+  assert.deepEqual(await snapshot(home), before);
+  await install(home, options);
+  assert.deepEqual(JSON.parse(await fs.readFile(join(home, "keys.json"))).global,
+    { "cmd-w": "pane.zoom", "cmd-shift-w": "pane.close", "cmd-t": "space.new" });
+  await check(home, { ...options, runCheck: async () => ({}) });
+  await put(sourceRoot, "keybindings.json", "[]");
+  await install(home, options);
+  assert.deepEqual(JSON.parse(await fs.readFile(join(home, "keys.json"))), defaultKeys);
+  await uninstall(home);
+  assert.deepEqual(JSON.parse(await fs.readFile(join(home, "keys.json"))), defaultKeys);
+});
+
+test("legacy ownership gains shortcut tracking without fabricating previous values", async t => {
+  const { home, options } = await fixture(t);
+  await install(home, options);
+  const record = JSON.parse(await fs.readFile(join(home, recordPath)));
+  record.schemaVersion = 1;
+  delete record.keybindings;
+  await put(home, recordPath, JSON.stringify(record));
+  const original = await fs.readFile(join(home, "keys.json"), "utf8");
+  await assert.rejects(check(home, { ...options, runCheck: async () => ({}) }), /Keybindings differ from suite/);
+  await install(home, options);
+  await check(home, { ...options, runCheck: async () => ({}) });
+  await uninstall(home);
+  assert.equal(await fs.readFile(join(home, "keys.json"), "utf8"), original);
+});
+
+for (const content of [null, "{", "[]", '{"global":null}', '{"global":{"cmd-w":null}}']) {
+  test(`missing or invalid keys ${JSON.stringify(content)} cannot create a partial deployment`, async t => {
+    const { home, options } = await fixture(t);
+    if (content === null) await fs.unlink(join(home, "keys.json"));
+    else await put(home, "keys.json", content);
+    const before = await snapshot(home);
+    await assert.rejects(install(home, options), /keys.json|keybinding|JSON/);
+    assert.deepEqual(await snapshot(home), before);
+  });
+}
+
+for (const rules of [null, [keybindings[0], keybindings[0]], [{ ...keybindings[0], section: "../escape" }],
+  [{ ...keybindings[0], key: "ctrl-alt-shift-escape" }], [{ section: "global", key: "cmd-w", to: "pane.close" }]]) {
+  test(`invalid shortcut preset ${JSON.stringify(rules)} is rejected without mutation`, async t => {
+    const { sourceRoot, home, options } = await fixture(t);
+    await put(sourceRoot, "keybindings.json", JSON.stringify(rules));
+    const before = await snapshot(home);
+    await assert.rejects(install(home, options), /Invalid keybinding|Duplicate keybinding/);
+    assert.deepEqual(await snapshot(home), before);
+  });
+}
+
+test("invalid binding ownership cannot overwrite keys during install or uninstall", async t => {
+  const { home, options } = await fixture(t);
+  await install(home, options);
+  const record = JSON.parse(await fs.readFile(join(home, recordPath)));
+  record.keybindings.push({ ...record.keybindings[0], before: "space.close" });
+  await put(home, recordPath, JSON.stringify(record));
+  const before = await snapshot(home);
+  await assert.rejects(install(home, options), /Duplicate keybinding/);
+  await assert.rejects(uninstall(home), /Duplicate keybinding/);
+  assert.deepEqual(await snapshot(home), before);
+});
+
+test("concurrent edits to adopted shortcuts stop ownership commit and preserve the external edit", async t => {
+  const { home, options } = await fixture(t);
+  const keys = { global: { "cmd-w": "pane.close" } };
+  await put(home, "keys.json", JSON.stringify(keys));
+  const before = await snapshot(home);
+  const external = JSON.stringify({ global: { "cmd-w": "tab.close" } });
+  await assert.rejects(install(home, { ...options, beforeCommit: async ({ path }) => {
+    if (path === recordPath) await put(home, "keys.json", external);
+  } }), /File changed during commit: keys.json/);
+  before["keys.json"] = Buffer.from(external).toString("hex");
+  assert.deepEqual(await snapshot(home), before);
+});
+
+test("concurrent edits before shortcut commit roll back deployed files without overwriting keys", async t => {
+  const { home, options } = await fixture(t);
+  const before = await snapshot(home);
+  const external = JSON.stringify({ global: { "cmd-w": "space.close" } });
+  await assert.rejects(install(home, { ...options, beforeCommit: async ({ path }) => {
+    if (path === "keys.json") await put(home, "keys.json", external);
+  } }), /File changed during commit: keys.json/);
+  before["keys.json"] = Buffer.from(external).toString("hex");
   assert.deepEqual(await snapshot(home), before);
 });
