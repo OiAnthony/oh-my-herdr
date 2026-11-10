@@ -21,7 +21,7 @@ node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs check
 herdr-app do layout.switch '{"name":"Professional"}'
 ```
 
-最后一条命令会改变当前窗口的布局。安装或检查不会替你执行它。`Professional` 使用个人标签栏副本，保留 Files、Changes，并将 `+` 改为默认启动项和下拉菜单的双段按钮。Open With 位于窗口右上角。底部 statusline 按机器、分支、agents、Git Graph 的顺序显示，原生命令面板提示保留在最右侧。左侧 footer 只保留 Settings、Add machine。
+最后一条命令会改变当前窗口的布局。安装或检查不会替你执行它。`Professional` 使用个人标签栏副本，保留 Files、Changes，并将 `+` 改为默认启动项和下拉菜单的双段按钮。右上角依次排列 Files、Changes、`+`、Open With，让两个启动入口相邻，菜单内容保持独立。底部 statusline 按机器、分支、agents、Git Graph 的顺序显示，原生命令面板提示保留在最右侧。左侧 footer 只保留 Settings、Add machine。
 
 指定其他应用目录时，对每条命令使用同一目录：
 
@@ -230,6 +230,11 @@ Git Graph 的上游版权与 MIT 文本随源码保留。Open With 品牌图标�
 ## 本机验证记录
 
 ### 未发布修改
+
+2026-11-10 右上角入口分组验证：
+
+- 已安装到本机 `~/.config/herdr-app`，安装器检查通过，六个 Mod 均通过 Herdr Desktop 0.1.14 的 `herdr-app check`。未切换布局或重启服务。
+- 当前 `Professional` 布局的应用原生帧截图确认右上角顺序为 Files、Changes、`+ OMP`、VS Code，两个启动入口相邻；应用状态的 `errors` 为空。未点击启动外部程序或新建 tab。
 
 2026-11-10 Agents 标题去重验证：
 

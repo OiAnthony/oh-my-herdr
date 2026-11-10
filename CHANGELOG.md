@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Professional 右上角改为 Files、Changes、`+`、Open With 的顺序，将两个启动入口相邻放置；保留独立菜单、默认项和快捷键行为，并同步布局预览图。
 - Professional 新增基于内置 Agents 0.1.14 的 `agents-professional` 副本；OMP 配有图标时只移除自动标题的前导品牌 `π`，保留状态符号、任务 emoji、正文和手动命名的 tab。内置 Agents 不变，副本及布局引用纳入套件安装归属。
 - Agent Launcher 和 Open With 的列表行尾预留 12 像素滚动条通道，避免滚动条覆盖设置默认项的星标按钮；保留按钮尺寸和原有点击行为。
 - 标签栏的下拉箭头改用固定 12 像素的内置 SVG，并显式水平、垂直居中，避免文本箭头受字体基线影响而偏下。
