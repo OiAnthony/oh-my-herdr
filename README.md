@@ -46,19 +46,49 @@ HERDR_APP_HOME=/private/var/tmp/oh-my-herdr-app herdr-app do layout.switch '{"na
 | git-graph | `mods/git-graph/` | Git 历史图、Manygit、详情、操作菜单与确认对话框 |
 | professional-status | `mods/professional-status/` | 布局适配器：机器、分支、agents、Git Graph 入口与命令面板提示 |
 
-布局继续引用内置 `workspace-chrome`、`spaces`、`agents`、`tabs`、`pane`、`files` 和 `changes`。这些模块由 Herdr 更新，不归套件管理。移除 `tabs-professional` 后不再维护标签栏副本；`professional-status` 的来源是内置 `workspace-status` 0.1.14。
+布局继续引用内置 `workspace-chrome`、`spaces`、`agents`、`tabs`、`files` 和 `changes`。这些模块由 Herdr 更新，不归套件管理。pane header 使用 `git-graph` 的 `pane-header` 角色，基于内置 `pane` 0.1.14 保留标题、状态及 split/zoom/close 操作，并为 diff 显示文件路径；宿主的原生 pane title 仍是只读值。移除 `tabs-professional` 后不再维护标签栏副本；`professional-status` 的来源是内置 `workspace-status` 0.1.14。
 
 两份重复 Git Graph 合并为 `git-graph`，采用较新的 0.3.2 实现，保留分支 checkout 的 `--` 安全边界和预热时跳过 working-tree status 的行为。`git-graph-main` 不再作为独立 Mod 部署。保留上游来源与许可证，不恢复模块自身的版本检查或更新提示。
 
-Open With 的 `props.role: "launcher"` 用于右上角双段按钮：主按钮显示默认应用图标和名称，点击直接打开当前仓库或目录；右侧下拉打开应用选择菜单，可选择其他打开方式或设置默认应用。默认角色仍是应用选择菜单；入口初始化不会提前启动外部程序。状态栏适配器通过布局传入的 Graph `panel`、`stack`、`child`、`mod` 绑定切换原右侧面板，Git Graph 入口仅显示文字，不使用浮窗，不把 Professional 节点 ID 写入 Git Graph 功能代码。
+Open With 的 `props.role: "launcher"` 用于右上角双段按钮：主按钮显示默认应用图标和名称，点击直接打开当前仓库或目录；右侧下拉打开应用选择菜单，可选择其他打开方式或设置默认应用。默认角色仍是应用选择菜单；入口初始化不会提前启动外部程序。状态栏适配器通过布局传入的 Graph `panel`、`mod` 绑定切换独立底部面板。入口仅显示文字，不使用浮窗，不把 Professional 节点 ID 写入 Git Graph 功能代码。
 
 Professional 为 launcher 传入 `props.widthTarget: "open-with-launcher"`，指定可调整宽度的布局节点。按钮通过原生尺寸回调将槽位调整为按钮实际宽度加 10 像素右侧留白，避免短名称留下固定占位；按钮最大宽度为 190 像素，超长名称截断。其他布局不传 `widthTarget` 时，Open With 不调整布局。
 
-内置 `tabs` 按 space 恢复 Files/Changes。它不会额外注册或恢复 Graph；切换 space 后需要时从底部 statusline 重开。Graph 的 Changes 跳转只在布局显式提供绑定且目标与内置 Changes 一致时显示；独立 pane、异仓库或 Manygit 子仓库不会误跳到当前窗口的另一个仓库。
+Git Graph 位于终端及右侧面板下方、状态栏上方，默认收起。点击底部 Git Graph 切换显示；拖动上沿调整高度，初始高度为 420 像素，范围为 240–800 像素。Files、Changes 继续共用右侧面板，可与 Graph 同时显示；内置 `tabs` 仍按 space 恢复 Files/Changes，不控制 Graph 的开关。
+
+当 workspace 本身是 Git 仓库且包含已初始化的 submodules 时，Graph 标题提供仓库选择器：主仓库标记为 `(root)`，子仓库使用 workspace 相对路径，递归包含嵌套 submodules，不受 Manygit 扫描深度限制。默认仍显示当前终端所在的仓库；切换后只读取所选仓库的历史、分支和工作区状态，详情、diff 与 Git 操作也固定到该仓库及机器。切换 workspace/cwd 后按新上下文加载；同一上下文重新进入时复用此前选择。
+
+仓库选择器使用锚定按钮的浮动菜单，覆盖在提交图上方，不挤占面板空间或推动列表。菜单最多高 260 像素，超出时内部滚动；选择仓库、按 Esc 或点击菜单外部可关闭。Manygit 打开仓库后的选择器使用相同浮层，返回仓库总览的行为不变。
+
+未初始化的 submodules 不显示，也不会自动初始化、更新或 fetch。没有 submodules 的普通仓库保持原样；非 Git 目录继续使用 Manygit 扫描。仓库列表在刷新历史时重新发现，打开选择器时重新读取各仓库状态。选择其他 submodule 不会改变终端 cwd 或内置 Changes 的目标。
+
+个人快捷键可在应用目录的 `keys.json` 中合并以下区块；安装器不修改快捷键。仅在 Professional 布局中，连续按两次 `⌘⇧G` 切换 Git Graph 的显示与隐藏；单次不切换面板，现有 `⌘G` 不变。这里使用 Herdr 原生的空格分隔按键序列，不需要新增 Mod。
+
+```json
+"layout:Professional": {
+  "cmd-shift-g cmd-shift-g": "layout.toggle:graph-panel"
+}
+```
+
+`keys.json` 自定义后不会自动合入新版默认快捷键，后续新增默认绑定需要手动合并。
+
+点击 commit 行，在该行下方展开详情；再次点击收起，点击另一条则切换展开项。左侧显示 Commit、Parents、Author、Committer、Date 和提交说明，右侧按目录显示变更文件及增删统计。窄面板改为上下排列。展开项与提交列表共用滚动区域，后续提交顺延，图线跨过展开区继续连接。Esc 或详情右上角的关闭按钮也可收起。
+
+单击变更文件会打开只读 diff 预览 tab，每个 space 最多保留一个可替换的预览。单击其他文件时，更新同一个 tab 的内容和名称，不关闭重建。双击文件会固定该 tab，后续单击会另开预览，不覆盖固定项；再次打开已固定的同一文件、仓库、机器和 commit，会切回原 tab。预览 tab 的名称带 `Preview`，固定后移除该前缀。使用标准 tab 关闭按钮关闭。
+
+预览正文区域仅显示 diff，行号、增删标记和 hunk 分隔行从顶部开始铺满可用空间；不重复显示文件路径、提交元信息、仓库位置或预览说明。预览/固定状态保留在 tab 名称中，提交详情仍在 Graph 展开区查看。保留横纵滚动，以及加载、空内容、二进制和错误状态；读取上限仍为 3,000 行、每行 2,000 字符，未跟踪文件最多读取前 400,000 字符。
+
+diff pane title 显示相对路径，完整标题可通过悬停查看。普通仓库相对 Git 根目录；从 workspace 打开子仓库或 submodule 时，相对 workspace 的 Git 根目录显示，无 Git 仓库的 workspace 则相对该目录。例如 workspace `/work/project` 中的 submodule `/work/project/libs/client`，文件 `src/index.ts` 显示为 `libs/client/src/index.ts`。直接在 submodule 中打开时显示 `src/index.ts`。路径基准和机器随 diff 固定，不跟随之后的 cwd 或焦点变化；不属于同一 workspace 的仓库使用自身相对路径。Git 读取始终在文件所属仓库执行，不把 workspace 相对路径传给 submodule 的 Git。
+
+每次读取都固定仓库、机器、commit 和文件，不随焦点改变；快速切换时，过期的异步结果不会覆盖新文件。未提交变更显示打开时读取的工作区内容。不创建终端或磁盘临时文件。预览状态由扩展管理，tab 仍按宿主规则保存和恢复，不依赖 Herdr 0.1.14 缺少的原生 preview-tab 标记。
+
+Graph 的 Changes 跳转只在布局显式提供绑定且目标与内置 Changes 一致时显示；独立 pane、异仓库或 Manygit 子仓库不会误跳到当前窗口的另一个仓库。
 
 ## 更新、接管与卸载
 
 更新源码后，再执行 `install`。它也是更新入口，不需要独立 updater。
+
+已移除 Git Graph 的 F4 源文件跳转与内部源文件预览。更新前先关闭已有的源文件预览 tab；diff 预览和固定 tab 不受影响。安装器会按归属记录移除未修改的旧 `source.js`、`source-file.js`，不修改全局快捷键。
 
 - 首次安装只接管与源码逐字节一致的已有文件。其他同名文件视为冲突。
 - 后续更新依据 `.oh-my-herdr/installed.json` 中的文件哈希判断归属。本地修改或删除受管文件时，安装停止，不强制覆盖。
@@ -110,15 +140,17 @@ Open With 在打开菜单或点击主按钮时固定目标。它从当前终端 
 
 源码到应用目录单向部署，不反向同步整个应用 home。不要提交生成类型、运行状态或个人配置。
 
-运行文件生命周期回归检查：
+运行文件生命周期、Open With 和 Graph 行内展开回归检查：
 
 ```sh
-node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs
+node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs desktop/extensions/oh-my-herdr/git-graph.test.mjs
 ```
 
 在隔离应用目录中安装并运行 `check`。要验证完整界面，还需要用独立的 `HERDR_APP_HOME` 和隔离 Core 会话启动真实应用；仅隔离应用 home 不代表 Core 终端和空间已隔离。
 
-`herdr-app check` 只覆盖初始加载，不覆盖异步数据、延迟绘制、实际布局和点击流程。真实窗口验收包括：内置标签栏、Files/Changes、statusline 的 Git Graph 位置、开关及高亮、Git 图和右键菜单、右上角 Open With 菜单与键盘关闭、窄 sidebar 和布局切换。未连接远程目标时，不宣称 Remote - SSH 已验证。
+commit 展开区使用 retained `CommitDetails` 子视图，挂载到虚拟列表中的独立条目。交互控件归子视图所有；不要在 deferred row renderer 注册事件，也不要把外层 render 创建的元素对象传进 row renderer。元素对象只属于创建它的那次描述，不能跨描述复用。
+
+`herdr-app check` 只覆盖初始加载，不覆盖异步数据、延迟绘制、实际布局和点击流程。真实窗口验收包括：内置标签栏、Files/Changes、底部 Graph 开关及高亮、commit 展开/收起/切换、展开后的图线和滚动、单击文件复用预览、双击固定、固定项不被替换、关闭预览后重开、Git 右键菜单、Open With 菜单与键盘关闭、窄面板和布局切换。未连接远程目标时，不宣称 Remote - SSH 已验证。
 
 ## 安全与分发边界
 
@@ -132,6 +164,8 @@ Git Graph 的上游版权与 MIT 文本随源码保留。Open With 品牌图标�
 
 ### 未发布修改
 
+2026-11-10 移除 F4 源文件跳转及专用预览实现，删除对应的四项源文件预览测试。保留的 10 项 Graph 回归检查全部通过，`git-graph` 通过 `herdr-app check`。此次未更新日常安装，未在真实窗口验证移除后的按键行为。
+
 2026-11-10 在 Herdr Desktop `0.1.14` 的隔离应用目录和独立 Core 会话中验证：
 
 - 54 项现有回归检查通过，三个 Mod 的 `herdr-app check` 均通过，宿主状态及 `.error` 检查无错误。
@@ -140,6 +174,14 @@ Git Graph 的上游版权与 MIT 文本随源码保留。Open With 品牌图标�
 - 使用实际主按钮回调和模拟执行器检查点击时的目录及默认应用、重复点击保护、远程应用过滤、失败通知和空配置禁用。未实际启动外部应用或连接 SSH，未验证鼠标坐标命中区域，未更新日常安装。
 
 同日完成按钮间距修复并更新日常安装：隔离窗口中，VS Code 和 IntelliJ IDEA 槽位分别随内容调整为 124、143 像素，超长自定义名称在 190 像素按钮上限内截断，下拉按钮保持可见。日常窗口中的 VS Code 槽位为 127 像素；已查看实际渲染，确认 Changes 旁的多余占位消失。54 项回归检查和三个 Mod 加载检查通过，布局、标签、焦点、设置及快捷键保留。
+
+本次底部面板与 commit 行内展开改动，在独立应用目录和 Core 会话中验证：
+
+- 部署 61 个受管文件，三个 Mod 的 `herdr-app check` 通过；8 项 Graph 回归检查覆盖展开位置、分页、收起、切换提交，以及预览替换、固定、关闭和目标隔离。
+- 真实窗口确认 Graph 位于底部，Files/Changes 可在右侧同时显示；通过宿主命令检查开关和高度调整。检查了 1280 × 820 和 760 × 600 像素窗口，元信息与文件区在宽面板左右排列，在窄面板上下排列。
+- 真实文件行回调连接实际宿主，确认单击其他文件保留 tab ID、双击固定后新增独立预览、再次打开固定项复用原 tab、关闭预览后可重开。真实 Git 读取覆盖已提交快照、未跟踪文本和二进制状态；确定性异步检查确认过期成功和失败均不覆盖新文件。
+- 已使用应用内截图检查提交详情、文件树和 diff 正文。系统屏幕录制权限未授予，原生鼠标命中与拖动尚未通过验收；回调驱动的结果不视为物理点击证明。
+- 未更新日常安装，未重启日常应用或终端。一次性脚本和回调探针已清理，隔离窗口保留供检查。
 
 ### 0.3.0
 

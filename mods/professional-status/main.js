@@ -24,29 +24,22 @@ export default class ProfessionalStatus extends View {
 
   graphTarget() {
     const binding = props()?.graph;
-    if (!binding?.panel || !binding.stack || !binding.child || !binding.mod) return null;
+    if (!binding?.panel || !binding.mod) return null;
     const panel = findNode(layout(), binding.panel);
-    const stack = findNode(panel, binding.stack);
-    const child = stack?.children?.find(node => node.id === binding.child);
-    return stack?.type === "stack" && child?.content?.mod === binding.mod ? { binding, panel, stack } : null;
+    return panel?.type === "block" && panel.content?.mod === binding.mod ? { binding, panel } : null;
   }
 
   toggleGraph() {
     const target = this.graphTarget();
     if (!target) return;
-    const { binding, panel, stack } = target;
-    if (!panel.hidden && stack.active === binding.child) run("layout.hide", { id: binding.panel });
-    else {
-      run("layout.select", { stack: binding.stack, child: binding.child });
-      run("layout.show", { id: binding.panel });
-    }
+    run("layout.toggle", { id: target.binding.panel });
   }
 
   render() {
     const t = theme(), space = spaces().find(s => s.active), list = agents();
     const needs = list.filter(agent => agent.status === "blocked").length;
     const target = this.graphTarget();
-    const active = Boolean(target && !target.panel.hidden && target.stack.active === target.binding.child);
+    const active = Boolean(target && !target.panel.hidden);
     const label = (icon, text) => h_flex().gap(6).items_center()
       .child(svg(`mods/workspace-chrome/${icon}.svg`).size(13)).child(text);
     return h_flex().size_full().px(14).gap(16).items_center().bg(t.chrome).border_t(1).border_color(t.border)

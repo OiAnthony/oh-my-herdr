@@ -43,6 +43,20 @@ export function parseFound(root, stdout, max = 500) {
   }).sort((a, b) => (a.group === b.group ? a.name.localeCompare(b.name) : a.group.localeCompare(b.group)));
 }
 
+// Git enumerates initialized submodules, including nested ones whose .git is
+// a file. NUL separation preserves spaces, newlines and literal backslashes.
+export async function submoduleWorkspace(root, on, exec) {
+  const result = await exec("git", [...READ, "submodule", "foreach", "--quiet", "--recursive", 'printf "%s\\0" "$displaypath"'], { cwd: root, on });
+  if (result.code !== 0) throw new Error((result.stderr || "Can't list submodules").trim());
+  const paths = [...new Set(result.stdout.split("\0").filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (!paths.length) return null;
+  const base = root.replace(/[/\\]+$/, "");
+  return { root, kind: "submodules", repos: [
+    { path: root, name: `${base.split(/[/\\]/).pop()} (root)`, group: "" },
+    ...paths.map(path => ({ path: `${base}/${path}`, name: path, group: "" })),
+  ] };
+}
+
 // Everything a row shows, in one git call: manygit needs six to eight.
 export const REPO_STATUS = [...READ, "status", "--porcelain=v2", "--branch", "-z", "--no-renames", "--untracked-files=normal"];
 
