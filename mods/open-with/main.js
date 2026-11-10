@@ -152,7 +152,7 @@ export default class OpenWith extends View {
         .child(div().text_size(12).text_color(t.muted).child(`${this.target.on ? `${this.target.on}:` : ""}${this.target.path ?? "No target"}`)))
       .when(this.loading, el => el.child(div().p(8).text_color(t.dim).child("Loading…")))
       .child(v_flex().id("open-with-apps").h(Math.min(this.apps.length * 36, 288)).flex_none().overflow_y_scrollbar().gap(2)
-        .children(this.apps.map((app, index) => h_flex().id(`open-with-${app.id}`).h(34).flex_none().pl(8).pr(4).gap(8)
+        .children(this.apps.map((app, index) => h_flex().id(`open-with-${app.id}`).h(34).flex_none().pl(8).pr(4).mr(12).gap(8)
           .role("menu_item").accessibility_label(`Open with ${app.title}`)
           .when(index === this.index, el => el.aria_active_descendant())
           .items_center().rounded(5).cursor_pointer().when(index === this.index, el => el.bg(t.selected))

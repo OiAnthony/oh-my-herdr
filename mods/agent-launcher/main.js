@@ -153,7 +153,7 @@ export default class AgentLauncher extends View {
         .when(this.loading, el => el.child(div().px(9).py(6).text_color(t.dim).child("Checking installed agents…")))
         .children(choices.map(({ choice, enabled: available }) => {
           const on = this.isDefault(choice), index = enabled.findIndex(c => c.choice.kind === choice.kind && c.choice.key === choice.key);
-          return h_flex().id(`agent-${choice.kind}-${choice.key}`).h(31).flex_none().items_center().rounded(6)
+          return h_flex().id(`agent-${choice.kind}-${choice.key}`).h(31).mr(12).flex_none().items_center().rounded(6)
             .when(index === this.index, el => el.bg(t.selected))
             .child(Button.new(`agent-start-${choice.kind}-${choice.key}`).h_full().flex_1().min_w(0).px(9).gap(9).justify_start()
               .disabled(!available || (choice.kind === "agent" && this.loading)).accessibility_label(`Start ${choice.name} in a new tab`)
