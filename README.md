@@ -1,6 +1,6 @@
 # oh-my-herdr
 
-一个包含布局、三个独立功能 Mods 和三个布局适配 Mods 的 Herdr Desktop 扩展项目。当前版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.14`。
+一个包含布局、三个独立功能 Mods 和四个布局适配 Mods 的 Herdr Desktop 扩展项目。当前版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.14`。
 
 源码统一放在 `desktop/extensions/oh-my-herdr/`，项目内包含 `layouts/`、`mods/`、快捷键预设、安装脚本和文档。它不是单个带路由器的 Mod；运行时仍部署为 Herdr 原生的多个 Mod 目录。不修改 Herdr 本体、内置 Mods 或内置布局；安装器按绑定合并快捷键，不覆盖整份个人配置。
 
@@ -37,7 +37,7 @@ HERDR_APP_HOME=/private/var/tmp/oh-my-herdr-app herdr-app do layout.switch '{"na
 
 ## 组件与源码
 
-`oh-my-herdr.json` 是套件清单，记录版本、组件路径和来源。`open-with`、`git-graph`、`agent-launcher` 各自维护功能代码与资源，不互相导入。`professional-status` 负责 Professional 状态栏的组合；`tabs-professional` 保留内置标签栏行为并提供 Agent Launcher 双段按钮；`agents-professional` 负责 Agents 列表的 OMP 标题去重。运行时部署这六个 Mod，不增加统一路由或跨 Mod shared 包。
+`oh-my-herdr.json` 是套件清单，记录版本、组件路径和来源。`open-with`、`git-graph`、`agent-launcher` 各自维护功能代码与资源，不互相导入。`professional-status` 负责状态栏组合，`tabs-professional` 负责标签栏和面板开关，`agents-professional` 负责 OMP 标题去重，`professional-panels` 为 Files/Changes 提供键盘焦点。运行时部署这七个 Mod，不增加统一路由或跨 Mod shared 包。
 
 | 组件 | 源码 | 用途 |
 | --- | --- | --- |
@@ -48,8 +48,9 @@ HERDR_APP_HOME=/private/var/tmp/oh-my-herdr-app herdr-app do layout.switch '{"na
 | agent-launcher | `mods/agent-launcher/` | 启动菜单、按机器保存默认项、自定义命令编辑器 |
 | tabs-professional | `mods/tabs-professional/` | 标签栏适配器：标签管理、Files/Changes 和默认启动按钮 |
 | agents-professional | `mods/agents-professional/` | Agents 适配器：有 OMP 图标时去掉自动标题的品牌前缀，保留状态和任务文本 |
+| professional-panels | `mods/professional-panels/` | Files/Changes 适配器：保留原生面板内容，接收焦点并支持快捷键隐藏 |
 
-布局继续引用内置 `workspace-chrome`、`spaces`、`files` 和 `changes`。这些模块由 Herdr 更新，不归套件管理。pane header 使用 `git-graph` 的 `pane-header` 角色，基于内置 `pane` 0.1.14 保留标题、状态及 split/zoom/close 操作，并为 diff 显示文件路径；宿主的原生 pane title 仍是只读值。`tabs-professional`、`professional-status`、`agents-professional` 分别基于内置 `tabs`、`workspace-status`、`agents` 0.1.14；更新 Herdr 时需手动核对副本与官方模块的行为差异。
+布局继续引用内置 `workspace-chrome` 和 `spaces`。这些模块由 Herdr 更新，不归套件管理。Files/Changes 使用 `professional-panels` 中从已安装 Herdr 0.1.14 复制的面板源码，图标仍引用内置 Files 资源。pane header 使用 `git-graph` 的 `pane-header` 角色，基于内置 `pane` 0.1.14 保留标题、状态及 split/zoom/close 操作，并为 diff 显示文件路径；宿主的原生 pane title 仍是只读值。其余适配器基于内置 `tabs`、`workspace-status`、`agents` 0.1.14；更新 Herdr 时需手动核对这些副本与官方模块的行为差异。
 
 两份重复 Git Graph 合并为 `git-graph`，采用较新的 0.3.2 实现，保留分支 checkout 的 `--` 安全边界和预热时跳过 working-tree status 的行为。`git-graph-main` 不再作为独立 Mod 部署。保留上游来源与许可证，不恢复模块自身的版本检查或更新提示。
 
@@ -122,12 +123,16 @@ Professional 的 Agents 列表使用自维护的 `agents-professional` 副本。
 | `⌘⇧W` | 移除绑定 | `pane.close` 或未绑定 |
 | `⌘G` | `open-with.open-default`，使用默认应用打开当前仓库或目录 | `mod.open:open-vscode`、`open-with.open-default` 或未绑定 |
 | `⌘⇧A` | `tabs-professional.launch-default`，在新 tab 启动默认项 | `tabs-professional.launch-default` 或未绑定 |
+| `⌘⇧E` | 显示并聚焦 Files；Files 已聚焦时隐藏右侧面板 | 未绑定或已匹配目标 |
+| `⌘⇧G` | 显示并聚焦 Changes；Changes 已聚焦时隐藏右侧面板 | 未绑定或已匹配目标 |
 
-关闭 pane 会结束它的终端；如果它是 tab 中最后一个 pane，Herdr 仍会关闭该 tab。预设只管理上述 `global` 绑定，不清除其他位置的 `tab.close`，也不覆盖更高优先级的 `terminal` 或布局绑定。
+关闭 pane 会结束它的终端；如果它是 tab 中最后一个 pane，Herdr 仍会关闭该 tab。预设管理表中的 `global` 绑定，以及 `mod:professional-panels` 中的 `⌘⇧E / ⌘⇧G`；不清除其他位置的 `tab.close`，也不覆盖更高优先级的个人 `terminal` 或布局绑定。
 
 `⌘G` 与 Open With 右上角主按钮共用启动逻辑，不弹出选择菜单。它在每次触发时读取默认应用和当前目标；远程目录仍只使用 VS Code。该命令需要当前布局显示 Open With 的 `props.role: "launcher"` 实例；Professional 已包含此入口。菜单实例不监听该命令，避免菜单与主按钮重复启动。
 
 `⌘⇧A` 需要当前布局包含 `tabs-professional` 实例，Professional 已提供。只有标签栏监听命令；菜单不会重复监听或创建第二个 tab。切换到不包含该标签栏的布局后，此快捷键不提供启动行为。
+
+`⌘⇧E / ⌘⇧G` 需要 `tabs-professional` 与 `professional-panels`，Professional 已包含。面板可见但键盘焦点在终端时，按键只聚焦，不隐藏；面板内的文件预览或提交输入框也算聚焦。在 Files 与 Changes 之间切换时直接聚焦另一面板；隐藏后回到当前终端或 pane。焦点交接使用一次性的 `professional-panels.focus` shared 值，面板接收后清空。右上角鼠标按钮仍按可见状态切换，并保留原有的按 space 恢复行为。
 
 每项规则包含 `section`、`key`、`from` 和 `to`。`from` 是首次接管时允许替换的旧命令，`to` 是目标命令；两者使用字符串，`null` 表示未绑定。未绑定或已匹配目标的按键也可接管。其他个人绑定（包括带参数的命令对象）保留；发生实际修改时，安装器会重新格式化整份 JSON。
 
@@ -139,13 +144,15 @@ Professional 的 Agents 列表使用自维护的 `agents-professional` 副本。
 
 遇到冲突时，按错误中的 section 和按键检查个人配置。若要由套件管理，先备份，再把该项改回 `.oh-my-herdr/installed.json` 中对应的 `after` 值（`null` 表示移除该项）；首次安装则改为表中接受的值，然后重新运行 `install`。没有强制覆盖选项。
 
-Git Graph 的个人快捷键不在预设内，可在应用目录的 `keys.json` 中合并以下区块。仅在 Professional 布局中，连续按两次 `⌘⇧G` 切换 Git Graph 的显示与隐藏；单次不切换面板，现有 `⌘G` 不变。这里使用 Herdr 原生的空格分隔按键序列，不需要新增 Mod。
+Git Graph 的个人快捷键不在预设内，可在应用目录的 `keys.json` 中合并以下区块。仅在 Professional 布局中，`⌘⌥G` 切换 Git Graph 的显示与隐藏，不占用 Files/Changes 的按键。
 
 ```json
 "layout:Professional": {
-  "cmd-shift-g cmd-shift-g": "layout.toggle:graph-panel"
+  "cmd-alt-g": "layout.toggle:graph-panel"
 }
 ```
+
+若此前使用 `cmd-shift-g cmd-shift-g` 的 Git Graph 示例，先移除旧序列，改用上述绑定。旧序列会截获单次 `⌘⇧G`，安装器不删除个人序列绑定。
 
 `keys.json` 自定义后不会自动合入新版默认快捷键，后续新增默认绑定需要手动合并。
 

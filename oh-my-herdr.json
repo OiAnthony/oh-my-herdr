@@ -35,6 +35,17 @@
       }
     },
     {
+      "name": "professional-panels",
+      "source": "mods/professional-panels",
+      "provenance": {
+        "origin": "Personal Files/Changes focus adapter; panel sources cloned from installed Herdr Desktop 0.1.14.",
+        "clonedFrom": [
+          { "name": "files", "version": "0.1.14" },
+          { "name": "changes", "version": "0.1.14" }
+        ]
+      }
+    },
+    {
       "name": "agents-professional",
       "source": "mods/agents-professional",
       "provenance": {

@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { check, install, loadBundle, resolveHome, uninstall } from "./oh-my-herdr.mjs";
 
-const names = ["open-with", "professional-status", "git-graph", "tabs-professional", "agent-launcher", "agents-professional"];
+const names = ["open-with", "professional-status", "git-graph", "tabs-professional", "agent-launcher", "agents-professional", "professional-panels"];
 const recordPath = ".oh-my-herdr/installed.json";
 const keybindings = [
   { section: "global", key: "cmd-w", from: "tab.close", to: "pane.close" },

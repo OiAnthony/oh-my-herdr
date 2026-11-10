@@ -1,6 +1,6 @@
 import { View, div, svg, image } from "gpui-kit";
 import { Button, h_flex } from "gpui-base";
-import { spaces, panes, run, openOverlay, theme, window, shared, layout, settings, nextCommand } from "herdr";
+import { spaces, panes, run, openOverlay, theme, window, shared, setShared, layout, settings, nextCommand, focused } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -19,6 +19,22 @@ export default class Tabs extends View {
       for (;;) {
         const command = await nextCommand();
         if (command === "launch-default") this.openLauncher("launch");
+        const child = command.endsWith("-files") ? "files" : command.endsWith("-changes") ? "changes" : null;
+        if (child && (command === `focus-${child}` || command === `toggle-${child}`)) {
+          const root = layout(), panel = find(root, "panel"), body = find(root, "panel-body");
+          if (!panel || !body) continue;
+          if (command === `toggle-${child}` && !panel.hidden && body.active === child) {
+            setShared("professional-panels.focus", null);
+            run("layout.hide", { id: "panel" });
+            const target = focused();
+            if (target?.pane) run("pane.focus", { pane: target.pane });
+            else if (target?.terminal) run("pane.focus", { terminal: target.terminal });
+          } else {
+            run("layout.select", { stack: "panel-body", child });
+            run("layout.show", { id: "panel" });
+            setShared("professional-panels.focus", child);
+          }
+        }
       }
     });
   }

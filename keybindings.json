@@ -2,5 +2,9 @@
   { "section": "global", "key": "cmd-w", "from": "tab.close", "to": "pane.close" },
   { "section": "global", "key": "cmd-shift-w", "from": "pane.close", "to": null },
   { "section": "global", "key": "cmd-g", "from": "mod.open:open-vscode", "to": "open-with.open-default" },
-  { "section": "global", "key": "cmd-shift-a", "from": null, "to": "tabs-professional.launch-default" }
+  { "section": "global", "key": "cmd-shift-a", "from": null, "to": "tabs-professional.launch-default" },
+  { "section": "global", "key": "cmd-shift-e", "from": null, "to": "tabs-professional.focus-files" },
+  { "section": "global", "key": "cmd-shift-g", "from": null, "to": "tabs-professional.focus-changes" },
+  { "section": "mod:professional-panels", "key": "cmd-shift-e", "from": null, "to": "tabs-professional.toggle-files" },
+  { "section": "mod:professional-panels", "key": "cmd-shift-g", "from": null, "to": "tabs-professional.toggle-changes" }
 ]

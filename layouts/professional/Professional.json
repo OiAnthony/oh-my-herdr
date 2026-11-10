@@ -146,14 +146,16 @@
                           "id": "files",
                           "type": "block",
                           "content": {
-                            "mod": "files"
+                            "mod": "professional-panels",
+                            "props": { "child": "files" }
                           }
                         },
                         {
                           "id": "changes",
                           "type": "block",
                           "content": {
-                            "mod": "changes"
+                            "mod": "professional-panels",
+                            "props": { "child": "changes" }
                           }
                         }
                       ],
