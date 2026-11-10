@@ -1,5 +1,6 @@
 [
   { "section": "global", "key": "cmd-w", "from": "tab.close", "to": "pane.close" },
   { "section": "global", "key": "cmd-shift-w", "from": "pane.close", "to": null },
-  { "section": "global", "key": "cmd-g", "from": "mod.open:open-vscode", "to": "open-with.open-default" }
+  { "section": "global", "key": "cmd-g", "from": "mod.open:open-vscode", "to": "open-with.open-default" },
+  { "section": "global", "key": "cmd-shift-a", "from": null, "to": "tabs-professional.launch-default" }
 ]

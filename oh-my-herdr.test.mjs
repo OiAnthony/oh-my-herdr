@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { check, install, loadBundle, resolveHome, uninstall } from "./oh-my-herdr.mjs";
 
-const names = ["open-with", "professional-status", "git-graph"];
+const names = ["open-with", "professional-status", "git-graph", "tabs-professional", "agent-launcher"];
 const recordPath = ".oh-my-herdr/installed.json";
 const keybindings = [
   { section: "global", key: "cmd-w", from: "tab.close", to: "pane.close" },
@@ -323,7 +323,7 @@ test("historical graph ownership cannot include private files", async t => {
   assert.deepEqual(await snapshot(home), before);
 });
 
-for (const name of ["open-vscode", "tabs-professional"]) {
+for (const name of ["open-vscode"]) {
   test(`migration retires owned ${name} without removing personal files`, async t => {
     const { home, options } = await fixture(t);
     await install(home, options);
@@ -346,6 +346,38 @@ for (const name of ["open-vscode", "tabs-professional"]) {
     assert.deepEqual(await snapshot(home), before);
   });
 }
+
+test("reintroduced tabs upgrade historical ownership without removing personal files", async t => {
+  const { home, options } = await fixture(t);
+  await install(home, options);
+  const historical = await addHistoricalMod(home, "tabs-professional");
+  await put(home, "mods/tabs-professional/notes.txt", "personal");
+  await install(home, options);
+  assert.equal(await fs.readFile(join(home, historical), "utf8"), 'export default "tabs-professional";\n');
+  assert.equal(await fs.readFile(join(home, "mods/tabs-professional/notes.txt"), "utf8"), "personal");
+});
+
+test("agent shortcut preserves the native palette and restores absence on uninstall", async t => {
+  const { sourceRoot, home, options } = await fixture(t);
+  const original = structuredClone(defaultKeys);
+  original.global["cmd-shift-p"] = "app.palette";
+  await put(home, "keys.json", JSON.stringify(original));
+  await put(sourceRoot, "keybindings.json", JSON.stringify([
+    ...keybindings, { section: "global", key: "cmd-shift-a", from: null, to: "tabs-professional.launch-default" },
+  ]));
+  await install(home, options);
+  const installed = JSON.parse(await fs.readFile(join(home, "keys.json")));
+  assert.equal(installed.global["cmd-shift-a"], "tabs-professional.launch-default");
+  assert.equal(installed.global["cmd-shift-p"], "app.palette");
+  assert.equal(installed.global["cmd-t"], "tab.new");
+  await uninstall(home);
+  assert.deepEqual(JSON.parse(await fs.readFile(join(home, "keys.json"))), original);
+  original.global["cmd-shift-a"] = "space.new";
+  await put(home, "keys.json", JSON.stringify(original));
+  const before = await snapshot(home);
+  await assert.rejects(install(home, options), /Unowned keybinding conflict/);
+  assert.deepEqual(await snapshot(home), before);
+});
 
 test("SSH host migration preserves private data and runs only during retirement", async t => {
   const { home, options } = await fixture(t);

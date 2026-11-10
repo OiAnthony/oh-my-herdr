@@ -1,0 +1,5 @@
+{
+  "title": "Agent Launcher",
+  "place": "none",
+  "overlay": { "kind": "popup", "width": 250, "height": 512 }
+}

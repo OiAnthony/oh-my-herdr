@@ -83,7 +83,7 @@
             {
               "id": "workspace-tabs",
               "type": "block",
-              "content": { "mod": "tabs" }
+              "content": { "mod": "tabs-professional" }
             },
             {
               "id": "open-with-launcher",

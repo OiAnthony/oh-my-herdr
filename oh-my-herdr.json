@@ -27,6 +27,23 @@
       }
     },
     {
+      "name": "tabs-professional",
+      "source": "mods/tabs-professional",
+      "provenance": {
+        "origin": "Personal tabs adapter with the Agent Launcher split button; preserves tabs and Files/Changes behavior.",
+        "clonedFrom": { "name": "tabs", "version": "0.1.14" }
+      }
+    },
+    {
+      "name": "agent-launcher",
+      "source": "mods/agent-launcher",
+      "provenance": {
+        "origin": "Agent launch menu and custom-command editor; menu actions derived from new-menu 0.1.14.",
+        "branding": "icons/SOURCE.oh-my-pi.txt; OMP icon under MIT, see icons/LICENSE.oh-my-pi",
+        "clonedFrom": { "name": "new-menu", "version": "0.1.14" }
+      }
+    },
+    {
       "name": "git-graph",
       "source": "mods/git-graph",
       "upstream": "https://github.com/rabeeh-ta/herdr-git-graph",

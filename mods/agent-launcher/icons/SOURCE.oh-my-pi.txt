@@ -1,0 +1,19 @@
+Oh My Pi (OMP) official icon
+
+Unmodified upstream assets/icon.svg, renamed omp.svg.
+Repository: https://github.com/can1357/oh-my-pi
+Release: v18.18.6
+Commit: 9058ab9d229663e229e2867824ba6df6f21e9e59
+Source: https://raw.githubusercontent.com/can1357/oh-my-pi/9058ab9d229663e229e2867824ba6df6f21e9e59/assets/icon.svg
+Git blob SHA-1: f1ccf2a08a90ec4d7f6bb947dc62c5e995114422
+SHA-256: 727019727006f26fe3d1f187d3fe9830f26213733a51721096a2044ab059cf61
+License: MIT; see LICENSE.oh-my-pi
+License source: https://raw.githubusercontent.com/can1357/oh-my-pi/9058ab9d229663e229e2867824ba6df6f21e9e59/LICENSE
+
+Authority: https://registry.npmjs.org/@oh-my-pi/pi-coding-agent/18.18.6
+The published package maps the omp executable to dist/cli.js and declares
+repository git+https://github.com/can1357/oh-my-pi.git (packages/coding-agent).
+Tag: https://api.github.com/repos/can1357/oh-my-pi/git/ref/tags/v18.18.6
+
+Vendored locally; no runtime network access. This preserves the original
+white/orange/dark artwork and does not redraw or recolor the upstream icon.
