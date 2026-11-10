@@ -35,6 +35,14 @@
       }
     },
     {
+      "name": "agents-professional",
+      "source": "mods/agents-professional",
+      "provenance": {
+        "origin": "Personal Agents adapter; removes duplicate OMP branding from automatic titles while preserving status and task text.",
+        "clonedFrom": { "name": "agents", "version": "0.1.14" }
+      }
+    },
+    {
       "name": "agent-launcher",
       "source": "mods/agent-launcher",
       "provenance": {

@@ -1,6 +1,6 @@
 # oh-my-herdr
 
-一个包含布局、三个独立功能 Mods 和两个布局适配 Mods 的 Herdr Desktop 扩展项目。当前版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.14`。
+一个包含布局、三个独立功能 Mods 和三个布局适配 Mods 的 Herdr Desktop 扩展项目。当前版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.14`。
 
 源码统一放在 `desktop/extensions/oh-my-herdr/`，项目内包含 `layouts/`、`mods/`、快捷键预设、安装脚本和文档。它不是单个带路由器的 Mod；运行时仍部署为 Herdr 原生的多个 Mod 目录。不修改 Herdr 本体、内置 Mods 或内置布局；安装器按绑定合并快捷键，不覆盖整份个人配置。
 
@@ -37,7 +37,7 @@ HERDR_APP_HOME=/private/var/tmp/oh-my-herdr-app herdr-app do layout.switch '{"na
 
 ## 组件与源码
 
-`oh-my-herdr.json` 是套件清单，记录版本、组件路径和来源。`open-with`、`git-graph`、`agent-launcher` 各自维护功能代码与资源，不互相导入。`professional-status` 负责 Professional 状态栏的组合；`tabs-professional` 保留内置标签栏行为并提供 Agent Launcher 双段按钮。运行时部署这五个 Mod，不增加统一路由或跨 Mod shared 包。
+`oh-my-herdr.json` 是套件清单，记录版本、组件路径和来源。`open-with`、`git-graph`、`agent-launcher` 各自维护功能代码与资源，不互相导入。`professional-status` 负责 Professional 状态栏的组合；`tabs-professional` 保留内置标签栏行为并提供 Agent Launcher 双段按钮；`agents-professional` 负责 Agents 列表的 OMP 标题去重。运行时部署这六个 Mod，不增加统一路由或跨 Mod shared 包。
 
 | 组件 | 源码 | 用途 |
 | --- | --- | --- |
@@ -47,8 +47,9 @@ HERDR_APP_HOME=/private/var/tmp/oh-my-herdr-app herdr-app do layout.switch '{"na
 | professional-status | `mods/professional-status/` | 布局适配器：机器、分支、agents、Git Graph 入口与命令面板提示 |
 | agent-launcher | `mods/agent-launcher/` | 启动菜单、按机器保存默认项、自定义命令编辑器 |
 | tabs-professional | `mods/tabs-professional/` | 标签栏适配器：标签管理、Files/Changes 和默认启动按钮 |
+| agents-professional | `mods/agents-professional/` | Agents 适配器：有 OMP 图标时去掉自动标题的品牌前缀，保留状态和任务文本 |
 
-布局继续引用内置 `workspace-chrome`、`spaces`、`agents`、`files` 和 `changes`。这些模块由 Herdr 更新，不归套件管理。pane header 使用 `git-graph` 的 `pane-header` 角色，基于内置 `pane` 0.1.14 保留标题、状态及 split/zoom/close 操作，并为 diff 显示文件路径；宿主的原生 pane title 仍是只读值。`tabs-professional` 和 `professional-status` 分别基于内置 `tabs`、`workspace-status` 0.1.14；更新 Herdr 时需手动核对副本与官方模块的行为差异。
+布局继续引用内置 `workspace-chrome`、`spaces`、`files` 和 `changes`。这些模块由 Herdr 更新，不归套件管理。pane header 使用 `git-graph` 的 `pane-header` 角色，基于内置 `pane` 0.1.14 保留标题、状态及 split/zoom/close 操作，并为 diff 显示文件路径；宿主的原生 pane title 仍是只读值。`tabs-professional`、`professional-status`、`agents-professional` 分别基于内置 `tabs`、`workspace-status`、`agents` 0.1.14；更新 Herdr 时需手动核对副本与官方模块的行为差异。
 
 两份重复 Git Graph 合并为 `git-graph`，采用较新的 0.3.2 实现，保留分支 checkout 的 `--` 安全边界和预热时跳过 working-tree status 的行为。`git-graph-main` 不再作为独立 Mod 部署。保留上游来源与许可证，不恢复模块自身的版本检查或更新提示。
 
@@ -108,6 +109,8 @@ Professional 标签栏的主按钮显示当前机器的默认启动项，点击�
 默认路径为 `~/.config/herdr-app/programs.json`；设置了 `HERDR_APP_HOME` 时使用该目录。文件已有内容时只合并对应条目，不覆盖其他程序。Herdr 会热加载配置；关闭并重新打开菜单即可读取新条目。是否可启动仍由目标机器的 shell 检测。注册不改变默认项，也不占用自定义命令槽；套件安装器不管理此个人配置。
 
 OMP 图标直接取自 [oh-my-pi 官方仓库 v18.18.6](https://github.com/can1357/oh-my-pi/blob/v18.18.6/assets/icon.svg)，保留原始配色；资源随 `agent-launcher` 分发，MIT 许可和固定来源记录位于其 `icons/` 目录。注册图标仍属于个人程序表配置，安装器不会自动添加或覆盖该条目。
+
+Professional 的 Agents 列表使用自维护的 `agents-professional` 副本。当程序 key 为 `omp` 且配置了图标时，仅去掉自动终端标题开头的 `π` 及其分隔空白，保留后续状态符号、任务 emoji 和正文中的 `π`。没有图标、其他程序及手动命名的 tab 沿用原有行为；不修改终端原始标题。分组、优先级和置顶视图共用同一标题处理。首次从内置 Agents 切换时，若要保留本机状态计时，可在新副本启用前将 `data/agents/store.json` 复制到尚不存在的 `data/agents-professional/store.json`；安装器不管理这些运行状态。
 
 ## 快捷键管理
 
@@ -202,10 +205,10 @@ Open With 在打开菜单或点击主按钮时固定目标。它从当前终端 
 
 源码到应用目录单向部署，不反向同步整个应用 home。不要提交生成类型、运行状态或个人配置。
 
-运行文件生命周期、Agent Launcher、Open With 和 Graph 行内展开回归检查：
+运行文件生命周期、Agents 标题、Agent Launcher、Open With 和 Graph 行内展开回归检查：
 
 ```sh
-node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/agent-launcher.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs desktop/extensions/oh-my-herdr/git-graph.test.mjs
+node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/agents-professional.test.mjs desktop/extensions/oh-my-herdr/agent-launcher.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs desktop/extensions/oh-my-herdr/git-graph.test.mjs
 ```
 
 在隔离应用目录中安装并运行 `check`。要验证完整界面，还需要用独立的 `HERDR_APP_HOME` 和隔离 Core 会话启动真实应用；仅隔离应用 home 不代表 Core 终端和空间已隔离。
@@ -227,6 +230,12 @@ Git Graph 的上游版权与 MIT 文本随源码保留。Open With 品牌图标�
 ## 本机验证记录
 
 ### 未发布修改
+
+2026-11-10 Agents 标题去重验证：
+
+- 3 项标题回归检查和 64 项安装器检查通过；旧清理逻辑下，标题去重的 2 项检查失败，修正后全部通过。覆盖状态符号、任务 emoji、正文中的 `π`、无图标、其他程序和手动命名的 tab。
+- 源码与日常运行副本均通过 `herdr-app check`。部署新增 `agents-professional` 并更新 Professional 的 Agents 引用，未修改内置模块、快捷键或切换布局；首次启用前复制原 Agents 的状态计时快照，保留原文件。
+- 真实窗口截图确认只保留 OMP 图标，后续 `>`、工作状态符号及任务 emoji 仍显示；应用状态的 `errors` 为空。未重启服务或发送终端输入。
 
 2026-11-10 Agent Launcher 验证：
 

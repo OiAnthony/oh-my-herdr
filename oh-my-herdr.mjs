@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const RECORD = ".oh-my-herdr/installed.json";
-const MODS = new Set(["open-with", "professional-status", "git-graph", "tabs-professional", "agent-launcher"]);
+const MODS = new Set(["open-with", "professional-status", "git-graph", "tabs-professional", "agent-launcher", "agents-professional"]);
 // Historical ownership is accepted only to remove retired components during updates.
 const OWNED_MODS = new Set([...MODS, "git-graph-main", "open-vscode"]);
 const LAYOUTS = new Set(["Professional"]);

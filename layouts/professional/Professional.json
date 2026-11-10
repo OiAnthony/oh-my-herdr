@@ -41,7 +41,7 @@
               "id": "agents",
               "type": "block",
               "content": {
-                "mod": "agents"
+                "mod": "agents-professional"
               },
               "size": {
                 "weight": 1
