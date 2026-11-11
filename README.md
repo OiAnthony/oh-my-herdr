@@ -1,127 +1,60 @@
 # oh-my-herdr
 
-一个包含布局、四个独立功能 Mods 和四个布局适配 Mods 的 Herdr Desktop 扩展项目。当前发布版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.15`；下述 Resources 功能属于未发布修改。
+Herdr Desktop 的 Professional 工作区：左侧 Spaces 和 Agents，右上角启动 Agent 或打开仓库，右侧 Files/Changes，底部 Git Graph、CPU 和内存。
 
-项目内包含 `layouts/`、`mods/`、快捷键预设、安装脚本和文档。它不是单个带路由器的 Mod；运行时仍部署为 Herdr 原生的多个 Mod 目录。不修改 Herdr 本体、内置 Mods 或内置布局；安装器按绑定合并快捷键，不覆盖整份个人配置。
+![Professional 布局](preview.png)
 
-## 安装与启用
+支持 Herdr Desktop 0.1.15，不适用于 Herdr TUI。当前源码对应 0.3.0。
 
-需要 Node.js 和已安装的 `herdr-app`。从源码构建 Resources helper 时还需要 Rust；macOS 需要 Xcode Command Line Tools。helper 随 Mod 安装，运行时不需要 Rust。先用目标应用目录启动一次 Herdr，生成内置模块、图标及类型声明。
+## 安装
 
-在本仓库根目录执行：
+需要 Herdr Desktop 0.1.15（至少启动过一次）、Node.js、Rust 工具链；macOS 还要 Xcode Command Line Tools。终端要能运行 `herdr-app`。
 
 ```sh
-node scripts/build-resource-helper.mjs
-node oh-my-herdr.mjs install
-node oh-my-herdr.mjs check
+git clone https://github.com/OiAnthony/oh-my-herdr.git && oh-my-herdr/install.sh
 ```
 
-`install` 部署组件、合并快捷键并记录归属，不切换布局。`check` 检查部署文件、受管快捷键、布局引用和静态资源，并对每个 Mod 执行 `herdr-app check`。成功后，手动选择布局：
+脚本编译资源采集程序、安装布局和 8 个 Mods、合并快捷键，再运行 `herdr-app check`。成功时输出 `8 mods checked`。安装默认不切换布局，也不重启 Herdr；遇到文件或快捷键冲突会停止。先看要执行的命令可加 `--dry-run`。
+
+Mods 是可信代码，安装前可以读源码。
+
+## 启用
 
 ```sh
 herdr-app do layout.switch '{"name":"Professional"}'
 ```
 
-最后一条命令会改变当前窗口的布局。安装或检查不会替你执行它。`Professional` 使用个人标签栏副本，保留 Files、Changes，并将 `+` 改为默认启动项和下拉菜单的双段按钮。右上角依次排列 Files、Changes、`+`、Open With，让两个启动入口相邻，菜单内容保持独立。底部 statusline 显示机器、分支、agents、Git Graph、实时 Resources 数据，原生命令面板提示保留在最右侧。左侧 footer 只保留 Settings、Add machine。
-
-指定其他应用目录时，对每条命令使用同一目录：
+安装时加 `--switch` 可以一步完成：
 
 ```sh
-node oh-my-herdr.mjs install /private/var/tmp/oh-my-herdr-app
-node oh-my-herdr.mjs check /private/var/tmp/oh-my-herdr-app
-HERDR_APP_HOME=/private/var/tmp/oh-my-herdr-app herdr-app do layout.switch '{"name":"Professional"}'
+oh-my-herdr/install.sh --switch
 ```
 
-目录优先级：命令最后一个路径参数、`HERDR_APP_HOME`、`$XDG_CONFIG_HOME/herdr-app`、`~/.config/herdr-app`。
+`herdr-app check` 只验证部署和初始加载，布局与交互仍要在窗口里确认。
 
-安装器拒绝路径中的符号链接，包括父目录。macOS 上 `/var` 是系统链接，因此示例使用真实路径 `/private/var/tmp`；其他位置也应使用不含链接的物理路径。
+## 快速上手
 
-## 组件与源码
+右上角两个按钮分别启动 Agent 和打开仓库。点主按钮用默认项，点箭头换选项，点行尾星标设默认。
 
-`oh-my-herdr.json` 是套件清单，记录版本、组件路径和来源。`open-with`、`git-graph`、`agent-launcher`、`resource-monitor` 各自维护功能代码与资源，不互相导入。`professional-status` 负责状态栏组合，`tabs-professional` 负责标签栏和面板开关，`agents-professional` 负责 OMP 标题去重，`professional-panels` 为 Files/Changes 提供键盘焦点。运行时部署这八个 Mod，不增加统一路由或跨 Mod shared 包。
+| 快捷键 | 功能 |
+| --- | --- |
+| `⌘⇧A` | 启动当前机器的默认 Agent |
+| `⌘G` | 用默认应用打开当前仓库或目录 |
+| `⌘⇧E` | 显示并聚焦 Files；已聚焦时隐藏 |
+| `⌘⇧G` | 切换 Changes；300 ms 内连按两次切换 Git Graph |
+| `⌘W` | 关闭当前 pane；最后一个 pane 关闭时也关闭 tab |
+| `⌘T` | 新建终端 |
+| `⌘⇧P` | 命令面板 |
 
-| 组件 | 源码 | 用途 |
-| --- | --- | --- |
-| Professional | `layouts/professional/` | 自定义工作区布局和预览图 |
-| open-with | `mods/open-with/` | 选择本机应用打开当前仓库或目录；VS Code 支持 Remote - SSH |
-| git-graph | `mods/git-graph/` | Git 历史图、Manygit、详情、操作菜单与确认对话框 |
-| professional-status | `mods/professional-status/` | 布局适配器：机器、分支、agents、Git Graph 与命令面板提示 |
-| agent-launcher | `mods/agent-launcher/` | 启动菜单、按机器保存默认项、自定义命令编辑器 |
-| resource-monitor | `mods/resource-monitor/` | 按机器和终端归属展示 CPU、内存、子进程与 TCP 监听端口 |
-| tabs-professional | `mods/tabs-professional/` | 标签栏适配器：标签管理、Files/Changes 和默认启动按钮 |
-| agents-professional | `mods/agents-professional/` | Agents 适配器：有 OMP 图标时去掉自动标题的品牌和重复状态前缀，保留任务文本 |
-| professional-panels | `mods/professional-panels/` | Files/Changes 适配器：保留原生面板内容，接收焦点并支持快捷键隐藏 |
+点底部 CPU 或内存读数打开 Resource Manager。直接输入过滤，空格分词，第一次 Esc 清空，第二次关闭。Tree 页可以打开 Ports 查看监听端口。
 
-布局继续引用内置 `workspace-chrome` 和 `spaces`。这些模块由 Herdr 更新，不归套件管理。Files/Changes 使用 `professional-panels` 中从已安装 Herdr 0.1.14 复制的面板源码，图标仍引用内置 Files 资源。pane header 使用 `git-graph` 的 `pane-header` 角色，基于内置 `pane` 0.1.14 保留标题、状态及 split/zoom/close 操作，并为 diff 显示文件路径；宿主的原生 pane title 仍是只读值。其余适配器基于内置 `tabs`、`workspace-status`、`agents` 0.1.14；更新 Herdr 时需手动核对这些副本与官方模块的行为差异。
+`⌘W` 会结束 pane 里的终端。`⌘⇧W` 原有的关闭 pane 绑定已被移除。
 
-两份重复 Git Graph 合并为 `git-graph`，采用较新的 0.3.2 实现，保留分支 checkout 的 `--` 安全边界和预热时跳过 working-tree status 的行为。`git-graph-main` 不再作为独立 Mod 部署。保留上游来源与许可证，不恢复模块自身的版本检查或更新提示。
+## 配置
 
-Open With 的 `props.role: "launcher"` 用于右上角双段按钮：主按钮显示默认应用图标和名称，点击直接打开当前仓库或目录；右侧下拉打开应用选择菜单，可选择其他打开方式或设置默认应用。默认角色仍是应用选择菜单；入口初始化不会提前启动外部程序。状态栏适配器通过布局传入的 Graph `panel`、`mod` 绑定切换独立底部面板。入口仅显示文字，不使用浮窗，不把 Professional 节点 ID 写入 Git Graph 功能代码。
+应用目录默认是 `~/.config/herdr-app`。换目录时先 `export HERDR_APP_HOME=/path/to/app-home`，路径和父目录不能含符号链接。
 
-Professional 为 launcher 传入 `props.widthTarget: "open-with-launcher"`，指定可调整宽度的布局节点。按钮通过原生尺寸回调将槽位调整为按钮实际宽度加 10 像素右侧留白，避免短名称留下固定占位；按钮最大宽度为 190 像素，超长名称截断。其他布局不传 `widthTarget` 时，Open With 不调整布局。
-
-Git Graph 位于终端及右侧面板下方、状态栏上方，默认收起。点击底部 Git Graph 切换显示；拖动上沿调整高度，初始高度为 420 像素，范围为 240–800 像素。Files、Changes 继续共用右侧面板，可与 Graph 同时显示；`tabs-professional` 沿用内置标签栏按 space 恢复 Files/Changes 的逻辑，不控制 Graph 的开关。
-
-当 workspace 本身是 Git 仓库且包含已初始化的 submodules 时，Graph 标题提供仓库选择器：主仓库标记为 `(root)`，子仓库使用 workspace 相对路径，递归包含嵌套 submodules，不受 Manygit 扫描深度限制。默认仍显示当前终端所在的仓库；切换后只读取所选仓库的历史、分支和工作区状态，详情、diff 与 Git 操作也固定到该仓库及机器。切换 workspace/cwd 后按新上下文加载；同一上下文重新进入时复用此前选择。
-
-仓库选择器使用锚定按钮的浮动菜单，覆盖在提交图上方，不挤占面板空间或推动列表。菜单最多高 260 像素，超出时内部滚动；选择仓库、按 Esc 或点击菜单外部可关闭。Manygit 打开仓库后的选择器使用相同浮层，返回仓库总览的行为不变。
-
-未初始化的 submodules 不显示，也不会自动初始化、更新或 fetch。没有 submodules 的普通仓库保持原样；非 Git 目录继续使用 Manygit 扫描。仓库列表在刷新历史时重新发现，打开选择器时重新读取各仓库状态。选择其他 submodule 不会改变终端 cwd 或内置 Changes 的目标。
-
-点击 commit 行，在该行下方展开详情；再次点击收起，点击另一条则切换展开项。左侧显示 Commit、Parents、Author、Committer、Date 和提交说明，右侧按目录显示变更文件及增删统计。窄面板改为上下排列。展开项与提交列表共用滚动区域，后续提交顺延，图线跨过展开区继续连接。Esc 或详情右上角的关闭按钮也可收起。
-
-单击变更文件会打开只读 diff 预览 tab，每个 space 最多保留一个可替换的预览。单击其他文件时，更新同一个 tab 的内容和名称，不关闭重建。双击文件会固定该 tab，后续单击会另开预览，不覆盖固定项；再次打开已固定的同一文件、仓库、机器和 commit，会切回原 tab。预览 tab 的名称带 `Preview`，固定后移除该前缀。使用标准 tab 关闭按钮关闭。
-
-预览正文区域仅显示 diff，行号、增删标记和 hunk 分隔行从顶部开始铺满可用空间；不重复显示文件路径、提交元信息、仓库位置或预览说明。预览/固定状态保留在 tab 名称中，提交详情仍在 Graph 展开区查看。保留横纵滚动，以及加载、空内容、二进制和错误状态；读取上限仍为 3,000 行、每行 2,000 字符，未跟踪文件最多读取前 400,000 字符。
-
-diff pane title 显示相对路径，完整标题可通过悬停查看。普通仓库相对 Git 根目录；从 workspace 打开子仓库或 submodule 时，相对 workspace 的 Git 根目录显示，无 Git 仓库的 workspace 则相对该目录。例如 workspace `/work/project` 中的 submodule `/work/project/libs/client`，文件 `src/index.ts` 显示为 `libs/client/src/index.ts`。直接在 submodule 中打开时显示 `src/index.ts`。路径基准和机器随 diff 固定，不跟随之后的 cwd 或焦点变化；不属于同一 workspace 的仓库使用自身相对路径。Git 读取始终在文件所属仓库执行，不把 workspace 相对路径传给 submodule 的 Git。
-
-每次读取都固定仓库、机器、commit 和文件，不随焦点改变；快速切换时，过期的异步结果不会覆盖新文件。未提交变更显示打开时读取的工作区内容。不创建终端或磁盘临时文件。预览状态由扩展管理，tab 仍按宿主规则保存和恢复，不依赖 Herdr 0.1.14 缺少的原生 preview-tab 标记。
-
-Graph 的 Changes 跳转只在布局显式提供绑定且目标与内置 Changes 一致时显示；独立 pane、异仓库或 Manygit 子仓库不会误跳到当前窗口的另一个仓库。
-
-## 查看资源、子进程与监听端口
-
-Professional footer 直接显示当前机器受管终端的 CPU 和内存，各配图标，不显示 `≈` 或终端数。CPU 低于 100% 时固定一位小数，例如 `1.0%`、`10.0%`；达到 100%（含舍入跨档）后显示整数，例如 `120%`。CPU 图标与数值使用主题的绿→黄→红连续渐变，0%、50%、100% 分别对应三个色点，超过 100% 保持红色；100% 代表用满一个逻辑核，不代表整机满载。未知值保持中性色，内存沿用原有显示。CPU、内存各自组成紧凑一组，数值使用等宽字体左对齐，与前面的图标保持 3 px 间距；分隔符使用 ` · `，前后各一个空格。组内按实际内容宽度排列，外层固定为 164 px，剩余空位留在整组右侧。点击打开向上、靠右对齐的 Resource Manager 弹层；点击外部或关闭按钮关闭。搜索时第一次 Esc 清空关键词并退出搜索，再次 Esc 关闭弹层。footer 与弹层由同一个 `resource-monitor` View 管理，共享一套采样。
-
-- 界面沿用 Orca 的弹层样式：416 px 弹层、640 px 高度上限、Resource Manager 标题、Tree / Processes 页签、CPU / Memory 摘要、Name / CPU / Memory 表头。弹层宽高分别不超过窗口的 95% 和 85%，定位前换算为像素尺寸，使底边紧贴 footer。内存按 1024 进位显示为 KB、MB、GB，未知值显示 `—`。覆盖不完整时在 tooltip 和弹层中说明已知小计。
-- Tree 合并原 Resources 与 PTYs，按 Space → Pane 展示，省略 Tab 层；当前 Space 置顶并展开。终端与 Pane 合并显示，保留非终端 Pane。展开可查看 OS 进程树、PID/PPID 和采样年龄，顶部保留内存趋势。Tab 信息仅用于内部归属解析。资源按 OS PPID 归属；Core 的逻辑 parent 只影响展示位置。嵌套终端根、重复根与分组汇总按进程身份去重。
-- Processes 将受管终端及其 OS 子进程铺平，一行一个进程，无需展开 Space 或 Pane。列为 Name / PID / CPU / Memory，按名称、PID、CPU、内存排序。默认内存降序，PID 升序；悬停显示机器、PPID、启动身份与内存口径。使用已有按机器去重的快照和虚拟列表，不新增采样器，也不触发端口或全机进程扫描。
-- 两页均移除固定搜索框。弹层中直接键入字符即可过滤，搜索期间显示当前关键词；Backspace 删除字符。空格分隔多个关键词，忽略大小写，每个关键词都须命中同一行或其所属路径，可以跨名称、机器、PID/PPID、CPU、内存等字段匹配。CPU、内存按显示格式匹配，如 `worker 12.5% 1.0 MB`；PID 和端口均支持子串匹配。Tree 自动展开命中路径并保留 OS 父进程链，切换页签清空搜索。方向键导航，Enter 展开、折叠；空格用于分词，`/` 作为普通搜索字符。
-- Tree 的 Ports 开关默认关闭。开启后，搜索可匹配监听地址、端口和 `TCP LISTEN`，并补充全机监听及未归属 Pane 的 Other processes。关闭后隐藏缓存端口行，保留关键词并仅按其他字段匹配。默认内存降序，可按名称或 CPU 排序。
-- 活跃应用每秒采集 CPU 和内存，同机请求合并，最多并发两台机器；失活暂停采集，恢复后重新建立 CPU 基线。弹层关闭时 footer 继续采样。关闭所属 View 才取消定时器、释放句柄并忽略迟到结果。footer 和弹层的显示内容未变时，不因新采样主动重绘；悬停时更新 footer 的 CPU 提示。
-- 监听端口只在弹层的 Tree 页可见且 Ports 开启时采集，每 5 秒一次。默认只读受管进程的 FD；全机监听搜索成本更高，仅在 Ports 开启且存在非空关键词时启用。切到 Processes 或关闭弹层后暂停端口采集。输入条件合并到下一次采样，不逐按键执行扫描。监听记录保留自己的进程元数据及启动身份，避免 PID 复用后误挂旧端口。
-- CPU 使用相邻累计 CPU 时间与单调时钟差计算，100% 表示一个核心，可超过 100%。首次、PID 复用、计数回退或间隔超过 3 秒时显示未知。macOS 主内存列使用 footprint，RSS 留在详情；Linux 使用 RSS，Windows 使用 Working Set。共享页仍可能重复计入，不代表主机物理内存占用。
-
-| 平台 | 采集方式 | 验证范围 |
-| --- | --- | --- |
-| macOS | libproc 的子进程查询、pidrusage、原生 FD/socket 信息 | arm64 实机：CPU 忙循环、子进程归属、IPv4/IPv6 监听与持续采样 |
-| Linux | `/proc` 的 stat、meminfo、TCP 表和 FD 链接 | x86_64 交叉编译检查；未做 Linux 运行验收 |
-| Windows | Toolhelp、GetProcessTimes、K32GetProcessMemoryInfo、GetExtendedTcpTable | x86_64 交叉编译检查；未做 Windows 运行验收 |
-
-构建命令只生成当前 OS/架构的 helper。远端机器需自行构建并将 `herdr-resource-sample` 放入其 PATH；未安装时显示明确错误，不退回 `ps`、`top`、`lsof` 或 PowerShell。安装器部署本机 helper 并保留可执行权限，失败回滚同时恢复原文件和权限。生成的二进制与 Cargo target 不入 Git，依赖及图标许可随 Mod 安装。
-
-此功能只读，不提权、不读取进程 argv/环境变量或终端内容、不保存采样历史、不请求 HTTP、不转发端口、不结束进程或重启 Core。macOS 不伪造主机可用内存；容器、已脱离受管树的 daemon 与 Desktop/Core 自身没有可靠 PID 绑定时，不虚构资源归属。
-
-本机 1 Hz、9 个受管根的各 30 秒测量中，helper 单核占用约 0.55–0.61%，峰值 RSS 约 1.9 MiB；全机端口搜索期间约 0.93%、3.9 MiB。数据不包含 Herdr IPC、生产 JS 与 GPUI，不能据此认定完整链路已达到 0.5% 目标。原生加载检查与宿主模拟回归通过，隔离应用的原生帧已确认真实采样、footer 与弹层布局；当前桌面权限不足，尚未完成像素级 1:1 和真实鼠标、键盘、滚动验收。契约、性能口径和复现命令见 [资源监控实施方案](docs/resource-monitor-plan.md)。
-
-单终端隔离原生应用的 10 秒短测中，App 与 helper 子进程相对暂停基线的增量约为 0.95% 单核（footer）和 0.89%（显示值稳定的 Resources 弹层）。这已包含实际 JS、exec 与原生绘制，但负载小、时间短，不代表多机器或活跃负载验收。该测量使用原来的内存与终端数 footer；改为直接显示 CPU 后尚未重测。
-
-## 在新 tab 启动 Agent
-
-Professional 标签栏的主按钮显示当前机器的默认启动项，点击后在新 tab 启动；`⌘⇧A` 使用同一入口。未设置默认项时打开选择菜单，不自动选择 agent。右侧箭头始终打开菜单，不创建 tab。
-
-- 点击 agent 行只启动一次，不改变默认项；点击行尾 `☆` 设为默认项，不启动。`★` 标记当前默认项。未安装的 agent 不可启动或设为默认。
-- 菜单保留 Terminal、New space、New worktree 和 Open worktree。`⌘T` 继续打开普通终端；`⌘⇧P` 保持原生命令面板，不新增面板副本或配置命令。
-- 选择 Custom command 编辑名称、程序和参数。参数使用 JSON 字符串数组，例如 `["--help"]`；无参数填 `[]`。程序支持可执行文件路径或宿主支持的 shell function，不把整段命令行放入 Program。参数不会隐式展开变量、管道或重定向；需要脚本时显式指定 shell 和脚本参数。保存不启动，也不自动取代已有的 agent 默认项；回到菜单后点击自定义项的星标设为默认。编辑已设为默认的自定义项会同步更新它。
-- 默认项和自定义命令分别保存在应用的持久 shared state 中：`agent-launcher.defaults`、`agent-launcher.commands`。按机器名称隔离，本机使用空字符串键。每台机器保存一个自定义命令。它们不归安装器管理，更新或卸载套件不删除这些个人配置；不要在参数中保存密钥。
-- Agent 默认项保存 key 和展示信息，启动时重新读取官方 `knownAgents({ on })` 的当前 `run`，不缓存启动参数。菜单固定打开时的 space、机器和目录；之后切换焦点不会改变目标。原 space 已关闭或默认 agent 不可用时明确报错，不换机器或 agent。无 space 时在本机创建 space。目录作为已捕获的目标传入，失效时由宿主报错，不改到其他目录。
-
-菜单沿用原生 `+` 的紧凑布局：宽 250 像素、行高 31 像素，高度随条目数变化；已安装项全部显示，未安装项最多显示两个，超出高度时仅列表内部滚动。不增加标题、机器说明或键盘教程；默认项操作通过星标和悬停提示呈现。
-
-双段按钮限制宽度并截断长名称，悬停可查看完整启动项。菜单支持方向键选择、Enter 启动、D 设置默认项和 Esc 关闭。自定义命令只交给官方 `tab.new` / `space.new` 执行；本扩展不发送首条任务、不安装 agent，也不自行维护终端生命周期。命令启动失败时使用宿主错误提示。
-
-列表来自 Herdr 的原生程序表，不自动枚举 PATH 中的所有命令。未内置的 agent（例如 OMP）可在应用目录的个人 `programs.json` 中注册：
+注册 OMP，在 `programs.json` 中加入：
 
 ```json
 {
@@ -136,214 +69,44 @@ Professional 标签栏的主按钮显示当前机器的默认启动项，点击�
 }
 ```
 
-默认路径为 `~/.config/herdr-app/programs.json`；设置了 `HERDR_APP_HOME` 时使用该目录。文件已有内容时只合并对应条目，不覆盖其他程序。Herdr 会热加载配置；关闭并重新打开菜单即可读取新条目。是否可启动仍由目标机器的 shell 检测。注册不改变默认项，也不占用自定义命令槽；套件安装器不管理此个人配置。
+Open With 的应用列表写在 `mods/open-with/apps.json`，每项需要 `id`、`title`，普通应用还需要 macOS `bundleId`，最多 20 项。Core 机器名和 SSH Host 不同时，在 `mods/open-with/hosts.json` 中写 `{"my-machine":"my-ssh-alias"}`，key 是机器名，value 是 SSH Host。
 
-OMP 图标直接取自 [oh-my-pi 官方仓库 v18.18.6](https://github.com/can1357/oh-my-pi/blob/v18.18.6/assets/icon.svg)，保留原始配色；资源随 `agent-launcher` 分发，MIT 许可和固定来源记录位于其 `icons/` 目录。注册图标仍属于个人程序表配置，安装器不会自动添加或覆盖该条目。
+## 更新与卸载
 
-Professional 的 Agents 列表使用自维护的 `agents-professional` 副本。当程序 key 为 `omp` 且配置了图标时，去掉自动终端标题开头的 `π` 及紧随其后的已知状态分隔符，状态统一由 Herdr 行尾标识展示。按 OMP 18.18.7 的标题格式识别 `>`、`!`、静态 `:` 和 braille、pulse、dots、line 四种 spinner；也处理关闭标题状态后的 `π: 标题` 格式。只移除前缀中的一个状态符号，保留任务 emoji、未知符号和正文中的 `π`。没有品牌前缀、没有图标、其他程序及手动命名的 tab 沿用原有行为；不修改终端原始标题。分组、优先级和置顶视图共用同一标题处理。首次从内置 Agents 切换时，若要保留本机状态计时，可在新副本启用前将 `data/agents/store.json` 复制到尚不存在的 `data/agents-professional/store.json`；安装器不管理这些运行状态。
+更新时进入项目目录重新运行：
 
-## 快捷键管理
-
-`keybindings.json` 是随套件分发的 macOS 按键预设，不是运行时 Mod。修改该文件后执行 `install`，安装器将规则合并到目标应用目录的 `keys.json`。
-
-| 按键 | 安装后的行为 | 首次安装接受的原绑定 |
-| --- | --- | --- |
-| `⌘W` | `pane.close` | `tab.close`、`pane.close` 或未绑定 |
-| `⌘⇧W` | 移除绑定 | `pane.close` 或未绑定 |
-| `⌘G` | `open-with.open-default`，使用默认应用打开当前仓库或目录 | `mod.open:open-vscode`、`open-with.open-default` 或未绑定 |
-| `⌘⇧A` | `tabs-professional.launch-default`，在新 tab 启动默认项 | `tabs-professional.launch-default` 或未绑定 |
-| `⌘⇧E` | 显示并聚焦 Files；Files 已聚焦时隐藏右侧面板 | 未绑定或已匹配目标 |
-| `⌘⇧G` | 切换 Changes 显示状态；打开时聚焦，已显示时隐藏，不受焦点位置影响 | 未绑定、旧 `tabs-professional.focus-changes` 或已匹配目标 |
-| `⌘⇧G ⌘⇧G`（间隔小于 300ms） | 在 Professional 中切换 Git Graph 显示状态 | 由单次命令计时；旧原生序列需未绑定或为 `layout.toggle:graph-panel` |
-
-关闭 pane 会结束它的终端；如果它是 tab 中最后一个 pane，Herdr 仍会关闭该 tab。预设管理表中的 `global` 绑定、`mod:professional-panels` 中的 `⌘⇧E / ⌘⇧G`，并清除 `layout:Professional` 和 `mod:professional-panels` 中的旧原生双次序列；不清除其他位置的 `tab.close`，也不覆盖更高优先级的个人 `terminal` 绑定。
-
-`⌘G` 与 Open With 右上角主按钮共用启动逻辑，不弹出选择菜单。它在每次触发时读取默认应用和当前目标；远程目录仍只使用 VS Code。该命令需要当前布局显示 Open With 的 `props.role: "launcher"` 实例；Professional 已包含此入口。菜单实例不监听该命令，避免菜单与主按钮重复启动。
-
-`⌘⇧A` 需要当前布局包含 `tabs-professional` 实例，Professional 已提供。只有标签栏监听命令；菜单不会重复监听或创建第二个 tab。切换到不包含该标签栏的布局后，此快捷键不提供启动行为。
-
-`⌘⇧E / ⌘⇧G` 需要 `tabs-professional` 与 `professional-panels`，Professional 已包含。Files 可见但键盘焦点在终端时，`⌘⇧E` 只聚焦，不隐藏；Files 内的文件预览也算聚焦。`⌘⇧G` 按 Changes 是否显示进行切换，即使焦点已回到终端，单次按键也会隐藏已显示的 Changes。当前显示 Files 时，单次 `⌘⇧G` 切换到 Changes 并聚焦；隐藏后回到当前终端或 pane。焦点交接使用一次性的 `professional-panels.focus` shared 值，面板接收后清空。右上角鼠标按钮仍按可见状态切换，并保留原有的按 space 恢复行为。
-
-`⌘⇧G` 由 `tabs-professional` 统一计时：单次等待 300ms 后切换 Changes；间隔小于 300ms 的第二次 `⌘⇧G` 取消单次操作并切换 Git Graph，保留右侧 Files/Changes 的状态。两种操作都在再次触发时隐藏对应面板。终端和 Files/Changes 面板的按键都交给同一实例，避免焦点切换打断判定。两次按键之间可以松开修饰键。切换 space、tab 或布局后不执行原先待处理的操作；`⌘⇧E` 立即执行并取消待处理的 Changes。宿主原生序列固定等待 1 秒，因此此处不注册原生双次序列。
-
-每项规则包含 `section`、`key`、`from` 和 `to`。`from` 是首次接管时允许替换的旧命令，`to` 是目标命令；两者使用字符串，`null` 表示未绑定。未绑定或已匹配目标的按键也可接管。其他个人绑定（包括带参数的命令对象）保留；发生实际修改时，安装器会重新格式化整份 JSON。
-
-- 首次安装：其他自定义值视为冲突，在任何部署写入前停止。`keys.json` 必须已由目标 Herdr 初始化，不能用局部配置替代整份默认快捷键。
-- 更新：受管绑定必须仍与上次安装值一致，否则 `install` 和 `check` 都报错。修改预设的目标值会沿用首次记录的原值；从预设移除规则会恢复其原值并解除管理。
-- 卸载：未修改的受管绑定恢复为安装前的实际值，原本未绑定的保持未绑定。个人后来改动的受管绑定保留，并输出警告；其余按键正常恢复。
-- 已匹配配置：接受并记录当前值，不推测历史默认值。因此手工改好后再首次纳管，卸载也保留这些手工设置。
-- 归属与回滚：各绑定的原值和安装值保存在 `.oh-my-herdr/installed.json`，与 Mods、布局一起事务提交；失败时恢复本次已写文件。旧版文件归属记录在安装时迁移，不伪造按键历史。配置缺失、JSON 无效或路径是符号链接时停止，不创建残缺默认配置。
-
-遇到冲突时，按错误中的 section 和按键检查个人配置。若要由套件管理，先备份，再把该项改回 `.oh-my-herdr/installed.json` 中对应的 `after` 值（`null` 表示移除该项）；首次安装则改为表中接受的值，然后重新运行 `install`。没有强制覆盖选项。
-
-Git Graph 的双次 `⌘⇧G` 已由预设管理。若还需要独立的显示/隐藏按键，可在应用目录的 `keys.json` 中保留或合并以下个人区块。仅在 Professional 布局中，`⌘⌥G` 切换 Git Graph 的显示与隐藏。
-
-```json
-"layout:Professional": {
-  "cmd-alt-g": "layout.toggle:graph-panel"
-}
+```sh
+./install.sh
 ```
 
-若此前使用 `cmd-shift-g cmd-shift-g` 的 `layout.toggle:graph-panel` 示例，安装器会将该项纳管并移除；已受管的 `layout.show:graph-panel` 序列也会移除，避免叠加宿主的 1 秒等待。卸载时恢复安装前的原值。其他个人序列命令仍按冲突规则保留。
-
-`keys.json` 自定义后不会自动合入新版默认快捷键，后续新增默认绑定需要手动合并。
-
-## 更新、接管与卸载
-
-更新源码后，再执行 `install`。它也是更新入口，不需要独立 updater。
-
-已移除 Git Graph 的 F4 源文件跳转与内部源文件预览。更新前先关闭已有的源文件预览 tab；diff 预览和固定 tab 不受影响。安装器会按归属记录移除未修改的旧 `source.js`、`source-file.js`。F4 功能退休不新增按键变更，安装时仅应用上述快捷键预设。
-
-- 首次安装只接管与源码逐字节一致的已有文件。其他同名文件视为冲突。
-- 后续更新依据 `.oh-my-herdr/installed.json` 中的文件哈希判断归属。本地修改或删除受管文件时，安装停止，不强制覆盖。
-- 操作先检查全部冲突。执行期间发生可恢复的文件操作错误时，回滚本次写入；这不是跨文件系统的断电事务。
-- 不修改 Herdr 自己的 `installed.json`，也不覆盖共享状态、会话、窗口信息或布局点击状态。
-- `apps.json`、`hosts.json`、自定义图标等非受管文件保留。生成的 `.d.ts`、`jsconfig.json`、`.error` 不作为套件源码发布。
-
-已有运行副本可能含有单独 updater 或本地修改，因此第一次整合可能报告冲突。先把冲突文件备份到应用目录之外，确认差异后再处理旧副本。不要直接清空整个 Mod 目录，也不要删除个人配置以绕过检查。
-
-从 `0.1.0` 或 `0.2.0` 升级时，安装器按旧归属记录移除未修改的 `git-graph-main` 和 `open-vscode` 受管文件。旧的受管 `tabs-professional` 更新为新的标签栏副本，不再退休；个人修改仍会阻止覆盖。`open-vscode` 的能力已合入 Open With，不部署旧入口或兼容别名。安装器将原先指向 `mod.open:open-vscode` 的 `global.cmd-g` 迁移为 `open-with.open-default`；其他个人布局或快捷键中的旧引用需要手动改为对应的 Open With 入口。
-
-退休 `open-vscode` 时，安装器将旧 `mods/open-vscode/hosts.json` 复制到 `mods/open-with/hosts.json`，仅在新文件不存在时写入；内容相同则保留，不同则在任何写入前停止。冲突时先备份并合并两份配置，再将旧文件移到 `mods/` 之外。新配置不纳入归属记录，卸载也不删除。迁移只执行一次，后续更新不再读取旧路径。
-
-升级前备份旧目录到应用目录之外。旧目录中剩余的生成文件或个人文件保留；升级后将这些剩余目录移入备份，不要继续留在 `mods/` 下。不要删除整个 `data/` 或手改 `layouts/.state/`。共享 `git-graph.*`、`open-with.default-app` 状态沿用。
-
-卸载前，先手动切回内置布局，并关闭使用这些 Mods 的自定义窗格或弹窗：
+卸载前先切回内置布局：
 
 ```sh
 herdr-app do layout.switch '{"name":"main"}'
+```
+
+再执行：
+
+```sh
 node oh-my-herdr.mjs uninstall
 ```
 
-卸载移除归属记录中的未修改文件，并按上述规则恢复快捷键。遇到修改过的受管文件时停止；非受管配置、生成文件和状态保留。安装器不自动切布局，因此卸载后引用这些 Mods 的其他个人布局需要自行调整。
+不要通过删除 `mods/` 或 `data/` 目录卸载。
 
-回退到不支持快捷键归属的旧套件版本前，先手动切回内置布局，再用当前源码执行 `uninstall`，最后使用旧源码执行 `install`。旧安装器不能直接读取新版归属记录。更新或回退前若存在本地修改，先在应用目录之外备份并完成合并，不使用强制覆盖。
+## 常见问题
 
-## Open With 配置
+| 现象 | 处理 |
+| --- | --- |
+| `Missing keys.json` | 用目标应用目录启动一次 Herdr，确认 `HERDR_APP_HOME` 一致 |
+| `Missing native resource helper` | 运行 `node scripts/build-resource-helper.mjs`，再重新安装 |
+| 检查通过但界面没变化 | 手动切到 Professional；安装器不会自动启用布局 |
+| 快捷键或文件冲突 | 按报错检查 `keys.json` 或受管文件；安装器不提供强制覆盖 |
 
-Open With 在打开菜单或点击主按钮时固定目标。它从当前终端 cwd 查询 Git 根目录；不在 Git 仓库时使用 cwd。没有当前终端 cwd 时，再使用当前 tab 的终端目录或 space 目录。它不读取 Files 或 Changes 的文件选择，也不支持文件目标。
+更多资料：
 
-默认候选为 VS Code、Finder、Zed、IntelliJ IDEA、Cursor 和 Sublime Text；应用需要另行安装。点击应用行执行本次打开，点击右侧星标设置默认应用。默认应用 ID 保存在共享状态 `open-with.default-app`，组件名称和状态 key 沿用整合前的值。
+- [Changelog](CHANGELOG.md)
+- [Gallery recipe](RECIPE.md)
+- [资源监控实施方案](docs/resource-monitor-plan.md)
+- [许可与来源](THIRD_PARTY.md)
 
-菜单支持方向键、Enter 打开、D 设置默认、Esc 关闭。设置默认应用后，主按钮立即同步图标和名称。主按钮每次点击时重新获取当前目录，打开失败时显示错误通知；菜单打开失败时保留错误，可以重试或选择其他应用。远程目标只提供 VS Code，通过本机的 Remote - SSH 打开，主按钮也显示 VS Code；不会把远程路径交给本机普通应用。Windows、Linux 上也只提供 VS Code。本机 macOS 继续提供完整应用列表。
-
-在目标目录的 `mods/open-with/apps.json` 中配置完整应用列表，例如：
-
-```json
-[
-  { "id": "vscode", "title": "VS Code", "bundleId": "com.microsoft.VSCode" },
-  { "id": "finder", "title": "Finder", "bundleId": "com.apple.finder" }
-]
-```
-
-每项需要唯一 `id` 和非空 `title`，最多 20 项。普通应用需要 macOS `bundleId`；`id: "vscode"` 是专用 VS Code 启动项，其 `bundleId` 可省略。可选 `icon` 为应用目录内的相对图片路径或绝对路径；省略时使用通用图标。不创建该文件时使用默认列表。远程目标或非 macOS 平台即使自定义列表省略 VS Code，也会提供内置 VS Code 项。此配置属于用户，不回写源码、不随更新删除。
-
-在 `mods/open-with/hosts.json` 中覆盖 Core 机器名到 SSH Host 的映射，例如 `{"my-machine":"my-ssh-alias"}`。远程打开依赖本机 VS Code 的 Remote - SSH 扩展、可用的 SSH 配置及连接权限，不随套件安装远程软件。它不能直接复用 Core 的 relay／`via` 连接，需要自行提供可用的 SSH Host。VS Code 优先使用 `code --folder-uri`，失败后使用本机协议打开器；两条路径使用同一目录和机器目标。
-
-## 开发与验证
-
-源码到应用目录单向部署，不反向同步整个应用 home。不要提交生成类型、运行状态或个人配置。
-
-运行文件生命周期、Agents 标题、Agent Launcher、Open With、Graph 行内展开和资源监控回归检查：
-
-```sh
-node scripts/build-resource-helper.mjs
-node --test *.test.mjs
-```
-
-在隔离应用目录中安装并运行 `check`。要验证完整界面，还需要用独立的 `HERDR_APP_HOME` 和隔离 Core 会话启动真实应用；仅隔离应用 home 不代表 Core 终端和空间已隔离。
-
-commit 展开区使用 retained `CommitDetails` 子视图，挂载到虚拟列表中的独立条目。交互控件归子视图所有；不要在 deferred row renderer 注册事件，也不要把外层 render 创建的元素对象传进 row renderer。元素对象只属于创建它的那次描述，不能跨描述复用。
-
-`herdr-app check` 只覆盖初始加载，不覆盖异步数据、延迟绘制、实际布局和点击流程。标签栏与启动菜单的真实窗口验收包括：标签切换/排序/关闭、Files/Changes、首次打开选择器、星标只设置默认项、主按钮和 `⌘⇧A` 各启动一个 tab、切换机器后的默认项隔离、自定义命令保存/取消/错误输入、菜单的 space/worktree 操作，以及 `⌘T` 和原生 `⌘⇧P`。其他验收包括底部 Graph 开关及高亮、commit 展开/收起/切换、展开后的图线和滚动、单击文件复用预览、双击固定、固定项不被替换、关闭预览后重开、Git 右键菜单、Open With 菜单与键盘关闭、窄面板和布局切换。未连接远程目标时，不宣称远程端到端行为已验证。
-
-## 安全与分发边界
-
-Mods 是可信代码，不是沙箱。Git Graph 可执行 Git 写入和网络操作，例如提交、切换分支、fetch、push；查看面板不等于授权执行这些操作。Open With 可以启动本机应用或通过 VS Code 发起远程连接。安装前应审查源码，不自动运行破坏性操作验证功能。
-
-Agent Launcher 可以在所选机器的终端中运行任意用户配置的程序，包括显式调用 shell 的脚本。扩展不发送任务或安装程序；设置星标和保存命令不会启动程序。仅在受信任的配置中填写命令，审查参数和目标机器后再启动。个人状态以明文保存，不适合存储凭据。
-
-Git Graph 的上游版权与 MIT 文本随源码保留。Open With 品牌图标的来源见 [NOTICE](mods/open-with/icons/NOTICE.txt)。其中部分图片提取自本机应用，提取不代表获得公开再分发许可。本套件当前用于本地整合；公开发布前必须核查组件和资源授权，不能把套件版本视为全部资源采用同一许可证。
-
-合入 Open With 的旧 `open-vscode` 快照没有附带 LICENSE，来源情况记录在组件清单中。原 Open With 的 Apache-2.0 文本不代表该导入代码也已获得同一授权。未核清授权前，不将本地整合包作为可公开分发的软件发布。
-
-## 本机验证记录
-
-### 未发布修改
-
-2026-11-11 Resources 原生采集改版验证：
-
-- 原生 CPU 忙循环、嵌套根去重、真实 IPv4/IPv6 监听、全机端口搜索和 CLI 输入验证通过；Linux/Windows x86_64 的 Cargo check 通过。
-- 宿主模拟验证单一 1 Hz 调度、未变值免重绘、失活暂停与 CPU 预热、按需监听采集、关闭释放和忽略迟到结果。安装器验证 helper 缺失、执行权限、修复与失败回滚。
-- 130 项 Node 回归、1 项 Cargo 单元测试通过。真实 GPUI 初始加载及强制打开的两页检查通过；隔离应用的原生帧确认了 footer、两页布局、趋势与真实监听端口筛选。首轮未验收点击、键盘和滚动；当时桌面自动化权限不足。采集量级及复现方法见资源监控方案。
-- footer 精简与 Space → Pane 调整后，28 项相关测试通过，覆盖 CPU 单独变化时刷新、无 `≈` 或终端数、多 Tab 下 Pane 平铺及筛选。已热更新日常应用，8 个 Mod 检查通过，应用无加载错误；当前原生帧确认 footer 为 CPU 与内存。新的资源树层级由测试验证，未在真实弹层中展开核对。
-- 新增 Processes 后，33 项相关测试及 8 个 Mod 加载检查通过。隔离 Mod 检查覆盖新增页面与已知、未知、过期进程行。已在真实窗口点击 footer、切换 Processes，确认 Space → Pane 展示及平表四列对齐、实时采样数据；实际筛选输入、排序点击、滚动和键盘仍未验收。
-
-2026-11-10 右上角入口分组验证：
-
-- 已安装到本机 `~/.config/herdr-app`，安装器检查通过，六个 Mod 均通过 Herdr Desktop 0.1.14 的 `herdr-app check`。未切换布局或重启服务。
-- 当前 `Professional` 布局的应用原生帧截图确认右上角顺序为 Files、Changes、`+ OMP`、VS Code，两个启动入口相邻；应用状态的 `errors` 为空。未点击启动外部程序或新建 tab。
-
-2026-11-10 Agents 标题去重验证：
-
-- 3 项标题回归检查和 64 项安装器检查通过；旧清理逻辑下，标题去重的 2 项检查失败，修正后全部通过。覆盖状态符号、任务 emoji、正文中的 `π`、无图标、其他程序和手动命名的 tab。
-- 源码与日常运行副本均通过 `herdr-app check`。部署新增 `agents-professional` 并更新 Professional 的 Agents 引用，未修改内置模块、快捷键或切换布局；首次启用前复制原 Agents 的状态计时快照，保留原文件。
-- 真实窗口截图确认只保留 OMP 图标，后续 `>`、工作状态符号及任务 emoji 仍显示；应用状态的 `errors` 为空。未重启服务或发送终端输入。
-
-2026-11-10 Agent Launcher 验证：
-
-- 71 项启动模型和安装器检查通过，覆盖命令参数边界、默认项失效、目标机器/目录固定、旧标签栏归属升级，以及新快捷键冲突和卸载恢复。原生 `⌘⇧P` 和 `⌘T` 的绑定保留。
-- 隔离应用目录部署 68 个受管文件，五个 Mod 的加载检查通过，应用状态未报告错误。另用临时副本通过带 agent 行的菜单和自定义命令编辑器的原生渲染检查。
-- 一次性脚本调用实际菜单、编辑器和标签栏回调，确认星标与保存不启动、主按钮/下拉/单次快捷键命令各分发一次、错误输入保留旧配置，以及自定义参数按字面传递。脚本模拟了宿主与元素，不作为真实终端启动、物理按键或视觉验收证明。
-- 验证期间系统锁屏，未完成真实窗口点击、布局和 `⌘⇧A` 按键验收；未启动真实 agent，未连接远程机器，也未部署到日常应用目录。
-
-
-2026-11-10 快捷键预设与生命周期验证：
-
-- 64 项安装器回归检查通过，覆盖合并保留、首次冲突、个人修改、规则更新与退休、旧记录迁移、卸载恢复、符号链接拒绝、并发修改检测及提交失败回滚。
-- 在隔离应用目录中，用实际 CLI 完成 `install`、`check`、`uninstall`：部署 63 个受管文件，三个 Mod 均通过 Herdr Desktop `0.1.14` 的加载检查，卸载后恢复默认按键。
-- 未安装到日常应用；验证前后日常 `keys.json` 字节一致。未触发关闭快捷键或做真实按键验收，隔离目录已清理。
-
-2026-11-10 移除 F4 源文件跳转及专用预览实现，删除对应的四项源文件预览测试。保留的 10 项 Graph 回归检查全部通过，`git-graph` 通过 `herdr-app check`。此次未更新日常安装，未在真实窗口验证移除后的按键行为。
-
-2026-11-10 在 Herdr Desktop `0.1.14` 的隔离应用目录和独立 Core 会话中验证：
-
-- 54 项现有回归检查通过，三个 Mod 的 `herdr-app check` 均通过，宿主状态及 `.error` 检查无错误。
-- 真实渲染显示右上角应用图标、名称和独立下拉按钮，以及底部纯文字 Git Graph；IntelliJ IDEA 名称完整显示。
-- 通过原生可访问性操作验证下拉按钮打开菜单、设置 Finder／IntelliJ IDEA 为默认应用后主按钮同步，以及 Esc 关闭菜单。
-- 使用实际主按钮回调和模拟执行器检查点击时的目录及默认应用、重复点击保护、远程应用过滤、失败通知和空配置禁用。未实际启动外部应用或连接 SSH，未验证鼠标坐标命中区域，未更新日常安装。
-
-同日完成按钮间距修复并更新日常安装：隔离窗口中，VS Code 和 IntelliJ IDEA 槽位分别随内容调整为 124、143 像素，超长自定义名称在 190 像素按钮上限内截断，下拉按钮保持可见。日常窗口中的 VS Code 槽位为 127 像素；已查看实际渲染，确认 Changes 旁的多余占位消失。54 项回归检查和三个 Mod 加载检查通过，布局、标签、焦点、设置及快捷键保留。
-
-本次底部面板与 commit 行内展开改动，在独立应用目录和 Core 会话中验证：
-
-- 部署 61 个受管文件，三个 Mod 的 `herdr-app check` 通过；8 项 Graph 回归检查覆盖展开位置、分页、收起、切换提交，以及预览替换、固定、关闭和目标隔离。
-- 真实窗口确认 Graph 位于底部，Files/Changes 可在右侧同时显示；通过宿主命令检查开关和高度调整。检查了 1280 × 820 和 760 × 600 像素窗口，元信息与文件区在宽面板左右排列，在窄面板上下排列。
-- 真实文件行回调连接实际宿主，确认单击其他文件保留 tab ID、双击固定后新增独立预览、再次打开固定项复用原 tab、关闭预览后可重开。真实 Git 读取覆盖已提交快照、未跟踪文本和二进制状态；确定性异步检查确认过期成功和失败均不覆盖新文件。
-- 已使用应用内截图检查提交详情、文件树和 diff 正文。系统屏幕录制权限未授予，原生鼠标命中与拖动尚未通过验收；回调驱动的结果不视为物理点击证明。
-- 未更新日常安装，未重启日常应用或终端。一次性脚本和回调探针已清理，隔离窗口保留供检查。
-
-### 0.3.0
-
-2026-11-10 在 Herdr Desktop `0.1.14`、Core `0.1.19`、Node.js `26.13.0` 上验证：
-
-- 54 项回归检查通过，覆盖组件退休、SSH 配置迁移与回滚、目标机器归属、URI 编码和启动失败路径。
-- 隔离目录部署 57 个受管文件，三个 Mod 的 `herdr-app check` 均通过。
-- 真实原生窗口显示右上角 Open With，以及底部机器、分支、agents 信息右侧的 Git Graph 按钮；左侧 footer 仅保留 Settings/Add machine。Git 图加载了临时仓库提交和未提交变更，状态无错误。
-- 通过一次性回调脚本连接真实宿主，验证 Graph 开、关及从 Changes 切回，以及右上角入口打开实际菜单；原生 Esc 关闭菜单通过。未进行鼠标命中区域验收。
-- 系统截图权限不足，使用应用自身的 `shot` 检查实际渲染，不修改系统权限。App home、Core session、配置和测试仓库均隔离，未更新日常安装。
-
-没有从菜单启动外部应用或连接 SSH。Remote - SSH 和 Windows PowerShell 路径仅完成逻辑边界检查，未作目标平台端到端验证。Git 测试提交只写入临时仓库，不写用户仓库或远端。
-
-### 0.2.0
-
-0.2.0 于 2026-11-09 在 Herdr Desktop `0.1.14`、Node.js `26.13.0` 上完成验证：
-
-- 33 项回归检查通过，覆盖文件生命周期、配置保留、路径边界、失败回滚以及五个 Mods 向四个 Mods 的归属迁移。
-- 隔离目录部署 60 个受管文件，四个 Mods 的 `herdr-app check` 全部通过。真实隔离窗口显示 Professional 工具栏和合并后的 Git 提交图，异步加载出测试提交，状态无错误。
-- 日常安装已更新到四个 Mods，四项加载检查通过。运行目录保留 21 个内置 Mods 和四个项目 Mods，旧 `git-graph-main` 目录已移到 `backups/` 下，不再参与加载。
-- 内置文件、设置和快捷键的哈希未变；当前布局、标签及焦点保持不变。源码旧平级入口已移入独立项目目录。
-- 系统截图权限不足，使用 Herdr 自带 `shot` 导出实际渲染画面，不修改系统权限。
-
-未执行 Git push、reset 等写入操作，未从菜单启动外部应用，未连接远程 SSH 目标。Open VS Code 完成静态加载检查，未作 Remote - SSH 端到端验证。重组和去重没有重启日常应用或终端。
-
+Linux、Windows 的资源采集和 Remote - SSH 尚未完成目标环境端到端验收；资源弹层的筛选、排序和键盘交互尚未完成完整实机验收。原创代码采用 Apache-2.0，第三方代码和资源保留各自许可。
