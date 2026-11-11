@@ -36,9 +36,9 @@ test("flat process filters match the same row without keeping parents; sorts use
   const nodes = build([terminal("a", 10, placed)],
     [process(10, 0, 10, { name: "shell", cpu: null }), process(11, 10, 20, { name: "Web worker", cpu: 0 }),
       process(12, 10, null, { name: "compiler", cpu: 8 })]);
-  assert.deepEqual(processRows(nodes, { filters: { name: "WEB", pid: "11" } }).map(row => row.process.pid), [11]);
-  assert.deepEqual(processRows(nodes, { filters: { name: "Web", pid: "10" } }), []);
-  assert.deepEqual(processRows(nodes, { filters: { pid: "1" } }), []);
+  assert.deepEqual(processRows(nodes, { query: " WEB  11 " }).map(row => row.process.pid), [11]);
+  assert.deepEqual(processRows(nodes, { query: "Web compiler" }), []);
+  assert.deepEqual(processRows(nodes, { query: "11" }).map(row => row.process.pid), [11]);
   assert.deepEqual(processRows(nodes).map(row => row.process.pid), [11, 10, 12]);
   assert.deepEqual(processRows(nodes, { sort: "cpu" }).map(row => row.process.pid), [12, 11, 10]);
   assert.deepEqual(processRows(nodes, { sort: "name" }).map(row => row.process.pid), [12, 10, 11]);
@@ -51,7 +51,7 @@ test("flat process identities separate equal PIDs on different machines and rese
   const rows = processRows(nodes);
   assert.equal(rows.length, 2);
   assert.notEqual(rows[0].id, rows[1].id);
-  assert.deepEqual(processRows(nodes, { filters: { name: "SSH" } }).map(row => row.node.machine), ["ssh"]);
+  assert.deepEqual(processRows(nodes, { query: "SSH" }).map(row => row.node.machine), ["ssh"]);
   const changedMetrics = build([terminal("a", 10, placed)], [process(10, 0, 100)]);
   assert.equal(processRows(changedMetrics)[0].id, rows.find(row => row.node.machine === null).id);
   const reused = build([terminal("a", 10, placed)], [process(10, 0, 100, { start: "new-start" })]);
@@ -107,10 +107,10 @@ test("panes from multiple tabs sit directly under their space without changing t
   assert.equal(all(tree).some(node => node.kind === "tab"), false);
   assert.equal(tree[0].memory, 30);
   assert.equal(tree[0].cpu, 2);
-  const filtered = buildResourceTree(nodes, { filters: { pid: "20", name: "Second pane" } });
+  const filtered = buildResourceTree(nodes, { query: "20 Second pane" });
   assert.deepEqual(filtered[0].children.map(node => node.pane), ["p2"]);
   assert.equal(filtered[0].children[0].visibleProcesses[0].pid, 20);
-  assert.deepEqual(buildResourceTree(nodes, { filters: { name: "Hidden tab" } }), []);
+  assert.deepEqual(buildResourceTree(nodes, { query: "Hidden tab" }), []);
 });
 
 test("name searches retain matching pane metadata, process names and enclosing paths", () => {
@@ -119,17 +119,17 @@ test("name searches retain matching pane metadata, process names and enclosing p
       panes: [{ pane: "p1", terminal: "t1", tab: "tab1", title: "Original title" }]
     });
   for (const name of ["Original title", "p1", "t1", "Work", "web-worker"]) {
-    const tree = buildResourceTree(nodes, { filters: { name } });
+    const tree = buildResourceTree(nodes, { query: name });
     assert.ok(leaf(tree, "t1"), name);
     if (name === "web-worker") {
       assert.equal(leaf(tree, "t1").showDetails, false);
       assert.equal(leaf(tree, "t2").visibleProcesses[0].pid, 20);
     }
   }
-  assert.deepEqual(buildResourceTree(nodes, { filters: { name: "not-present" } }), []);
+  assert.deepEqual(buildResourceTree(nodes, { query: "not-present" }), []);
 });
 
-test("PID and port filters must match the same process and retain its OS parent chain", () => {
+test("PID and port keywords match one process, accept substrings and retain its OS parent chain", () => {
   const snap = snapshot([process(10), process(11, 10), process(12, 11), process(13, 10)], {
     listeners: channel([
       { pid: 12, family: "ipv4", protocol: "tcp", address: "127.0.0.1", port: 8080 },
@@ -138,15 +138,16 @@ test("PID and port filters must match the same process and retain its OS parent 
   });
   const snapshots = new Map([["", snap]]);
   const nodes = build([terminal("t1", 10, placed)], [], { snapshots });
-  const tree = buildResourceTree(nodes, { snapshots, filters: { pid: "12", port: "8080" } });
+  const tree = buildResourceTree(nodes, { snapshots, showPorts: true, query: "12 8080" });
   const match = leaf(tree, "t1");
   assert.deepEqual(match.visibleProcesses.map(process => process.pid), [10, 11, 12]);
   assert.deepEqual(match.visiblePorts.map(port => port.port), [8080]);
   assert.equal(match.memory, 40);
-  assert.deepEqual(buildResourceTree(nodes, { snapshots, filters: { pid: "13", port: "8080" } }), []);
-  assert.deepEqual(buildResourceTree(nodes, { snapshots, filters: { port: "808" } }), []);
-  assert.deepEqual(buildResourceTree(nodes, { snapshots, filters: { pid: "1" } }), []);
-  assert.deepEqual(buildResourceTree(nodes, { snapshots, filters: { name: "not-present", port: "8080" } }), []);
+  assert.deepEqual(buildResourceTree(nodes, { snapshots, showPorts: true, query: "13 8080" }), []);
+  assert.deepEqual(leaf(buildResourceTree(nodes, { snapshots, showPorts: true, query: "808" }), "t1")
+    .visiblePorts.map(port => port.port), [8080]);
+  assert.deepEqual(buildResourceTree(nodes, { snapshots, query: "8080" }), []);
+  assert.deepEqual(buildResourceTree(nodes, { snapshots, showPorts: true, query: "not-present 8080" }), []);
   const expanded = new Set(all(tree).map(node => node.id));
   assert.equal(resourceRows(tree, { expanded }).filter(row => row.type === "port").length, 1);
   assert.equal(resourceRows(tree).length, 1);
@@ -160,7 +161,7 @@ test("port searches include unassigned listeners, deduplicate socket repeats and
   const snapshots = new Map([["", snap]]);
   const nodes = build([terminal("t1", 10, placed)], [], { snapshots });
   const before = structuredClone(nodes);
-  const tree = buildResourceTree(nodes, { snapshots, filters: { port: "8080" } });
+  const tree = buildResourceTree(nodes, { snapshots, showPorts: true, query: "8080" });
   const owners = all(tree).filter(node => node.kind === "process-owner");
   assert.deepEqual(owners.map(node => node.pid), [20, 99]);
   assert.equal(owners[0].name, "outside-server");
@@ -170,7 +171,7 @@ test("port searches include unassigned listeners, deduplicate socket repeats and
   assert.equal(owners[1].memory, null);
   assert.equal(owners[1].status, "partial");
   assert.equal(buildResourceTree(nodes).some(node => node.name.includes("Other processes")), false);
-  assert.equal(all(buildResourceTree(nodes, { snapshots, filters: { name: "outside-server", port: "8080" } }))
+  assert.equal(all(buildResourceTree(nodes, { snapshots, showPorts: true, query: "outside-server 8080" }))
     .filter(node => node.kind === "process-owner").length, 1);
   assert.deepEqual(nodes, before);
 });
@@ -181,12 +182,29 @@ test("port results keep equal remote PIDs separate and never duplicate managed l
   const snapshots = new Map([["", snapshot([process(10)], { listeners: channel([listener]) })],
     ["remote", snapshot([process(10)], { machine: "remote", listeners: channel([listener]) })]]);
   const nodes = build([terminal("t1", 10, placed)], [], { snapshots, spaces });
-  const tree = buildResourceTree(nodes, { snapshots, filters: { port: "8080" } });
+  const tree = buildResourceTree(nodes, { snapshots, showPorts: true, query: "8080" });
   const owners = all(tree).filter(node => node.kind === "process-owner");
   assert.equal(owners.length, 1);
   assert.equal(owners[0].machine, "remote");
   assert.equal(leaf(tree, "t1").visiblePorts.length, 1);
   assert.equal(resourceRows(tree, { currentSpace: "s1" })[0].node.space, "s1");
+});
+
+test("all table columns use displayed values and keywords can span fields", () => {
+  const nodes = build([terminal("a", 10, placed)], [
+    process(10, 0, 1024 ** 2, { name: "Web worker", cpu: 12.5 }),
+    process(11, 10, 2 * 1024 ** 3, { name: "compiler", cpu: 0 })
+  ]);
+  for (const query of ["WORKER 10 12.5% 1.0 MB", "compiler 11 0.0% 2.00 GB", "this computer worker"]) {
+    assert.equal(processRows(nodes, { query }).length, 1, query);
+    assert.ok(buildResourceTree(nodes, { query }).length, query);
+  }
+  assert.deepEqual(processRows(nodes, { query: "worker 2.00 GB" }), []);
+  assert.deepEqual(buildResourceTree(nodes, { query: "worker 2.00 GB" }), []);
+  const unknown = build([terminal("a", 10, placed)], [process(10, 0, null, { cpu: null })]);
+  assert.equal(processRows(unknown, { query: "—" }).length, 1);
+  const stale = build([terminal("a", 10, placed)], [process(10, 0, 1024 ** 2)], { now: at + 11000 });
+  assert.deepEqual(processRows(stale, { query: "1.0 MB" }), []);
 });
 
 test("OS trees are disjoint across nested roots while descendant counts retain the entire observed tree", () => {

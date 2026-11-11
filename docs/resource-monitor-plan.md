@@ -1,14 +1,16 @@
 # Resources 原生监控方案
 
-状态：源码已实现并已安装到本机日常应用；目标 Herdr Desktop 0.1.15。运行配置与构建产物不入库，套件尚未发布新版本。
+状态：资源监控已安装到本机日常应用；本次 Tree 合并尚未更新日常安装，目标 Herdr Desktop 0.1.15。运行配置与构建产物不入库，套件尚未发布新版本。
 
 ## 功能与边界
 
-Professional footer 直接显示 CPU 和内存，不显示 `≈` 或终端数。点击打开同一 View 的 Resource Manager。界面沿用 Orca 的图标、数值格式、416 px 宽度和 640 px 高度上限。Resources 展示资源树；PTYs 提供进程与端口筛选；Processes 提供 Name / PID / CPU / Memory 平表。使用原生 Popover、Tab、虚拟列表与主题色。
+Professional footer 直接显示 CPU 和内存，不显示 `≈` 或终端数。点击打开同一 View 的 Resource Manager。界面沿用 Orca 的图标、数值格式、416 px 宽度和 640 px 高度上限。原 Resources / PTYs 合并为 Tree，统一提供资源树、内存趋势和键入过滤；默认关闭的 Ports 开关控制端口显示及搜索范围。Processes 提供 Name / PID / CPU / Memory 平表。使用原生 Popover、Tab、虚拟列表与主题色。关闭 Ports 隐藏已缓存端口行，保留关键词并仅按其他字段匹配。
+
+两页均无固定搜索框。直接键入字符进入搜索，空格分隔关键词，忽略大小写且全部命中；支持跨字段匹配名称、机器、PID/PPID、显示格式的 CPU 和内存，Tree 还支持所属路径与已启用的监听字段。Backspace 删除字符，第一次 Esc 清空搜索，第二次 Esc 关闭弹层；Esc 使用局部 action 绑定，优先于 Popover 的默认关闭处理。方向键和 Enter 保留导航及展开操作，空格仅用于分词。切换页签清空搜索。
 
 监控对象是 Core 公开的 live 终端 PID 及真实 OS 后代。界面按 Space → Pane 展示，当前 Space 置顶；内部保留 Machine / Space / Tab / Pane 归属关系，展示时跳过 Tab 层。逻辑 parent 只定位展示层级；资源归属只使用 OS PPID。没有可靠 PID 绑定的 Desktop、Core、已脱离进程树的 daemon 和容器，不虚构计量桶。
 
-Processes 直接使用 Machine 汇总中已去重的进程，不先展开资源树。每个进程显示一次，使用 machine + PID + start 身份稳定标识行；同 PID 的不同机器彼此独立，PID 复用会更换行标识。名称/机器名与精确 PID 条件同时匹配同一行，不补入父进程。支持名称、PID、CPU、内存排序，CPU/内存排序时未知值排在已知值之后，过期 CPU/内存显示 `—`。该页共用 1 Hz 样本，使用虚拟列表，不增加 helper 调用或监听扫描。
+Processes 直接使用 Machine 汇总中已去重的进程，不先展开资源树。每个进程显示一次，使用 machine + PID + start 身份稳定标识行；同 PID 的不同机器彼此独立，PID 复用会更换行标识。多个关键词同时匹配同一行，不补入父进程，PID 支持子串匹配。支持名称、PID、CPU、内存排序，CPU/内存排序时未知值排在已知值之后，过期 CPU/内存显示 `—`。该页共用 1 Hz 样本，使用虚拟列表，不增加 helper 调用或监听扫描。Tree 开启 Ports 后，非空关键词搜索会启用全机监听查询，沿用 5 秒间隔，不逐按键扫描。
 
 功能只读，不提供清理、结束进程或重启服务操作。不读取进程命令行、环境变量或终端内容，不持久化采样数据，不发 HTTP 请求、不转发端口。内存趋势最多保留 60 个有效点，仅存于 View 内存。
 
@@ -38,7 +40,7 @@ footer 和弹层共用一个 Mod 实例，无共享 store 或第二个采样器�
 
 - 活跃应用每 1000 ms 采集 CPU/内存。同机请求合并，全局最多并发两台机器，较旧快照优先。单次 exec 超时 2000 ms。
 - 应用失活不启动新采样，清除 CPU 基线和监听调度时间；恢复后的首份 CPU 为未知。弹层关闭不影响 footer 采样。
-- 只在 PTYs 页可见时采集监听，每 5000 ms 一次。默认只读受管进程；端口筛选非空时才补充全机监听。输入修改合并到下一次 tick。
+- 只在弹层的 Tree 页可见且 Ports 开启时采集监听，每 5000 ms 一次。默认只读受管进程；存在非空关键词时补充全机监听。输入修改合并到下一次 tick。切到 Processes、关闭 Ports 或关闭弹层后暂停端口采集。
 - 连接、终端根或机器身份改变时作废旧基线。旧连接、已移除目标、已关闭 View 的迟到结果不合入新状态。
 - View 销毁后取消 timer，释放 InputState、FocusHandle、滚动句柄和历史。不会结束用户终端。
 - footer 和弹层按实际显示值比较；数值未变时，不因新快照时间推进主动重绘。CPU、行内容、状态或趋势改变时刷新。footer 悬停时更新 tooltip。
@@ -135,4 +137,10 @@ python3 scripts/bench-resource-helper.py --roots=123,456 --samples=30 --ports-ev
 
 原生宿主加载检查覆盖 footer 与强制打开的 Resources / PTYs；新增 Processes 后，另用隔离 Mod 检查了新增页面及已知、未知、过期进程行。33 项相关回归通过，覆盖平表去重、跨机器 PID、PID 复用、过滤、排序和共用采样。
 
+2026-11-11 合并为 Tree 后，34 项相关回归与 Herdr Desktop 0.1.15 的 Mod 加载检查通过。隔离应用 home、Core 会话和本机监听进程验证了 Tree / Processes 实际渲染、内存趋势、页签切换，以及 Ports 开关的启用与关闭。真实端口通过隔离副本预设筛选条件显示；关闭 Ports 后，端口行、端口筛选框与监听说明消失。原生辅助功能接口未能写入筛选框，因此预设条件验证不视为真实输入交互验收；本次未验证物理鼠标、键盘或滚动，未更新日常安装。
+
 通过宿主桌面工具在真实窗口点击 footer 并切换 Processes，已确认 Space → Pane 展示、平表四列对齐和真实采样数据。这不能证明像素级 1:1；实际筛选输入、排序点击、键盘焦点、Esc / outside dismissal、滚动、主题和窄窗口仍需真实窗口验收。只读范围和布局均在自维护扩展内，不修改 Desktop/Core/TUI 本体。
+
+2026-11-11 改为键入过滤后，38 项相关回归、完整 Node 测试与 Herdr Desktop 0.1.15 的 Mod 加载检查通过。隔离应用用固定样本验证无搜索框的 Tree 和预设 `worker 12.5% 2.0 MB` 的 Processes 渲染。通过原生 action 分发确认第一次 Esc 清空搜索且 `open=true`，释放后第二次令 `open=false`。后台窗口的辅助功能接口未暴露可操作控件，截图在后台也未持续刷新，因此这些结果不视为真实物理按键及关闭画面的验收。未更新日常安装。
+
+随后修复空格关闭弹层的回归。宿主 Popover 的空格与 Enter 绑定会先分发 Confirm action，再决定是否发送原始键盘事件；Resource Manager 现在为这两个按键注册局部 action。模拟该分发顺序的回归测试先复现空格令 `open=false`，修复后通过；39 项相关测试覆盖 Tree / Processes 的空格分词、Enter 行展开和两次 Esc。完整 Node 测试与 0.1.15 Mod 加载检查通过。本次未验证真实物理按键，未更新日常安装。

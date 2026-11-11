@@ -206,7 +206,7 @@
               "id": "status-resources",
               "type": "block",
               "content": { "mod": "resource-monitor" },
-              "size": { "px": 160 }
+              "size": { "px": 164 }
             },
             {
               "id": "status-hint",

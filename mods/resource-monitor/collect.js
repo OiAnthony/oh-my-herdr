@@ -30,7 +30,7 @@ export function parseNative(text, previous = null, at = Date.now(), maxAge = 300
     ? channel(rows.every(p => usable(p.footprint)) ? "ready" : "partial", at,
       rows.filter(p => usable(p.footprint)).map(p => ({ pid: p.pid, start: p.start, bytes: p.footprint })))
     : channel("unavailable", at, [], "Footprint is a macOS metric");
-  let listeners = channel("unavailable", 0, [], "Open Resources to collect listening ports");
+  let listeners = channel("unavailable", 0, [], "Enable Ports in Tree to collect listening ports");
   if (data.listeners) {
     if (!Array.isArray(data.listeners.rows) || typeof data.listeners.complete !== "boolean" ||
         !["managed", "all"].includes(data.listeners.scope)) throw new Error("Invalid listener snapshot");

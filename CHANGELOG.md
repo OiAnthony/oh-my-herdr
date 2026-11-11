@@ -2,11 +2,19 @@
 
 ## Unreleased
 
+- 修复 Resource Manager 按空格时关闭弹层的问题：空格和 Enter 使用面板内的 action 绑定，避免宿主 Popover 提前将它们作为确认操作；空格继续输入关键词分隔符，Enter 保留行展开行为。
+
+- Resource Manager 两页移除固定搜索框，改为直接键入过滤所有表格字段；支持空格分词、跨字段组合匹配与 Backspace 编辑。Tree 保留命中项的所属路径和 OS 父进程链；第一次 Esc 清空搜索，第二次 Esc 隐藏弹层。Ports 开启时，非空关键词搜索补充全机监听；关闭 Ports 保留关键词并排除监听字段。
+
+- Resource Manager 弹层在定位前按窗口尺寸计算像素宽高，保留 416 × 640 px 上限及窄窗口约束，消除百分比最大高度造成的 footer 上方空隙。
+
+- Resources footer 的 CPU 低于 100% 时固定一位小数，达到 100% 后显示整数，例如 `1.0%`、`10.0%`、`120%`；图标与数值按单核占用从主题绿色经黄色渐变到红色，未知值保持中性色。CPU、内存各自分组，等宽数值左对齐并紧贴前面的图标，分隔符前后各一个空格；组内按内容排列，外层固定为 164 px，剩余空位留在最右侧。
+
 - Professional 支持单次 `⌘⇧G` 等待 300ms 后切换 Changes、300ms 内连续两次切换 Git Graph；两种操作均可再次触发以隐藏对应面板。Changes 按可见状态切换，不受终端或面板焦点影响；双次操作保留右侧 Files/Changes 状态。由标签栏统一计时，切换 space、tab 或布局后丢弃待执行操作，Files 快捷键立即执行并取消待处理的 Changes。安装器移除旧原生双次序列，避免叠加宿主固定的 1 秒等待，卸载恢复安装前原值。
 - Agents 列表隐藏 OMP 自动标题中品牌后方的重复状态符号，包含等待、需关注、静态分隔符及四种 spinner；状态保留在 Herdr 行尾。任务 emoji、正文、无品牌标题及手动命名的 tab 保持原样。
-- Resources 改为 footer 实时 CPU、内存与原生弹层，共享一套 1 Hz 采样；footer 不显示 `≈` 和终端数。沿用 Orca 的 416 px 弹层、Resources / PTYs 页签与紧凑表格，资源树按 Space → Pane 展示，省略 Tab 层；保留排序、子进程树、趋势和组合搜索，未知及覆盖不完整单独标注。应用失活暂停，显示值不变时减少 footer 与弹层重绘。
+- Resources 改为 footer 实时 CPU、内存与原生弹层，共享一套 1 Hz 采样；footer 不显示 `≈` 和终端数。沿用 Orca 的 416 px 弹层与紧凑表格；原 Resources / PTYs 合并为 Tree 页签，资源树按 Space → Pane 展示，省略 Tab 层，统一保留排序、子进程树、内存趋势和组合搜索。Ports 开关默认关闭，关闭后清空端口条件并隐藏缓存端口行。未知及覆盖不完整单独标注；应用失活暂停，显示值不变时减少 footer 与弹层重绘。
 - Resource Manager 新增 Processes 页，将受管终端及子进程铺平成 Name / PID / CPU / Memory 明细表，支持名称或机器名、精确 PID 筛选与列排序；共享现有快照，不新增采样或端口扫描。
-- 新增 Rust helper：macOS 按受管根查询后代并读取 footprint/RSS 与累计 CPU；Linux 使用 procfs，Windows 使用原生进程和 TCP API。监听默认只查受管进程，打开 PTYs 页后每 5 秒采集；输入端口筛选时才补充全机监听。PID 复用、超时和迟到结果不污染当前数据，不回退重型系统命令。
+- 新增 Rust helper：macOS 按受管根查询后代并读取 footprint/RSS 与累计 CPU；Linux 使用 procfs，Windows 使用原生进程和 TCP API。监听默认只查受管进程，Tree 页可见且 Ports 开启后每 5 秒采集；输入端口筛选时才补充全机监听。PID 复用、超时和迟到结果不污染当前数据，不回退重型系统命令。
 - 安装器支持本机 helper 的构建前检查、可执行权限和失败回滚；目标 Desktop 版本更新为 0.1.15。原生源码与依赖锁入库，二进制按目标平台构建，许可随 Mod 安装。本机采集及 Linux/Windows 交叉编译检查通过；完整界面与全链路性能仍待验收。
 - 新增 `⌘⇧E` 聚焦 Files、`⌘⇧G` 切换 Changes；Files 已聚焦时再次按下隐藏，可见但未聚焦时只聚焦。Changes 按可见状态切换，隐藏后返回当前 pane。新增 `professional-panels` 布局适配器，保留内置 0.1.14 面板源码和原生子控件，内置模块不变；纳入安装归属和快捷键恢复。
 - Professional 右上角改为 Files、Changes、`+`、Open With 的顺序，将两个启动入口相邻放置；保留独立菜单、默认项和快捷键行为，并同步布局预览图。

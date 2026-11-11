@@ -2,18 +2,18 @@
 
 一个包含布局、四个独立功能 Mods 和四个布局适配 Mods 的 Herdr Desktop 扩展项目。当前发布版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.15`；下述 Resources 功能属于未发布修改。
 
-源码统一放在 `desktop/extensions/oh-my-herdr/`，项目内包含 `layouts/`、`mods/`、快捷键预设、安装脚本和文档。它不是单个带路由器的 Mod；运行时仍部署为 Herdr 原生的多个 Mod 目录。不修改 Herdr 本体、内置 Mods 或内置布局；安装器按绑定合并快捷键，不覆盖整份个人配置。
+项目内包含 `layouts/`、`mods/`、快捷键预设、安装脚本和文档。它不是单个带路由器的 Mod；运行时仍部署为 Herdr 原生的多个 Mod 目录。不修改 Herdr 本体、内置 Mods 或内置布局；安装器按绑定合并快捷键，不覆盖整份个人配置。
 
 ## 安装与启用
 
 需要 Node.js 和已安装的 `herdr-app`。从源码构建 Resources helper 时还需要 Rust；macOS 需要 Xcode Command Line Tools。helper 随 Mod 安装，运行时不需要 Rust。先用目标应用目录启动一次 Herdr，生成内置模块、图标及类型声明。
 
-在工作区根目录执行：
+在本仓库根目录执行：
 
 ```sh
-node desktop/extensions/oh-my-herdr/scripts/build-resource-helper.mjs
-node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs install
-node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs check
+node scripts/build-resource-helper.mjs
+node oh-my-herdr.mjs install
+node oh-my-herdr.mjs check
 ```
 
 `install` 部署组件、合并快捷键并记录归属，不切换布局。`check` 检查部署文件、受管快捷键、布局引用和静态资源，并对每个 Mod 执行 `herdr-app check`。成功后，手动选择布局：
@@ -27,8 +27,8 @@ herdr-app do layout.switch '{"name":"Professional"}'
 指定其他应用目录时，对每条命令使用同一目录：
 
 ```sh
-node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs install /private/var/tmp/oh-my-herdr-app
-node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs check /private/var/tmp/oh-my-herdr-app
+node oh-my-herdr.mjs install /private/var/tmp/oh-my-herdr-app
+node oh-my-herdr.mjs check /private/var/tmp/oh-my-herdr-app
 HERDR_APP_HOME=/private/var/tmp/oh-my-herdr-app herdr-app do layout.switch '{"name":"Professional"}'
 ```
 
@@ -82,14 +82,15 @@ Graph 的 Changes 跳转只在布局显式提供绑定且目标与内置 Changes
 
 ## 查看资源、子进程与监听端口
 
-Professional footer 直接显示当前机器受管终端的 CPU 和内存，各配图标，不显示 `≈` 或终端数。点击打开向上、靠右对齐的 Resource Manager 弹层；点击外部、关闭按钮或 Esc 关闭。footer 与弹层由同一个 `resource-monitor` View 管理，共享一套采样。
+Professional footer 直接显示当前机器受管终端的 CPU 和内存，各配图标，不显示 `≈` 或终端数。CPU 低于 100% 时固定一位小数，例如 `1.0%`、`10.0%`；达到 100%（含舍入跨档）后显示整数，例如 `120%`。CPU 图标与数值使用主题的绿→黄→红连续渐变，0%、50%、100% 分别对应三个色点，超过 100% 保持红色；100% 代表用满一个逻辑核，不代表整机满载。未知值保持中性色，内存沿用原有显示。CPU、内存各自组成紧凑一组，数值使用等宽字体左对齐，与前面的图标保持 3 px 间距；分隔符使用 ` · `，前后各一个空格。组内按实际内容宽度排列，外层固定为 164 px，剩余空位留在整组右侧。点击打开向上、靠右对齐的 Resource Manager 弹层；点击外部或关闭按钮关闭。搜索时第一次 Esc 清空关键词并退出搜索，再次 Esc 关闭弹层。footer 与弹层由同一个 `resource-monitor` View 管理，共享一套采样。
 
-- 界面沿用 Orca 的弹层样式：416 px 弹层、640 px 高度上限、Resource Manager 标题、Resources / PTYs / Processes 页签、CPU / Memory 摘要、Name / CPU / Memory 表头。内存按 1024 进位显示为 KB、MB、GB，未知值显示 `—`。覆盖不完整时在 tooltip 和弹层中说明已知小计。
-- Resources 按 Space → Pane 展示，省略 Tab 层；当前 Space 置顶并展开。终端与 Pane 合并显示，保留非终端 Pane。展开可查看 OS 进程树、PID/PPID 和采样年龄。Tab 信息仅用于内部归属解析。资源按 OS PPID 归属；Core 的逻辑 parent 只影响展示位置。嵌套终端根、重复根与分组汇总按进程身份去重。
-- Processes 将受管终端及其 OS 子进程铺平，一行一个进程，无需展开 Space 或 Pane。列为 Name / PID / CPU / Memory；支持名称或机器名称搜索、精确 PID 筛选，按名称、PID、CPU、内存排序。默认内存降序，PID 升序；悬停显示机器、PPID、启动身份与内存口径。使用已有按机器去重的快照和虚拟列表，不新增采样器，也不触发端口或全机进程扫描。
-- PTYs 页提供名称/地址、PID、端口筛选。PID 与端口精确匹配，组合条件要求同一进程命中。只有输入端口条件时，才补充全机监听进程及未归属 Pane 的 Other processes。方向键与 Enter/空格展开、折叠，`/` 聚焦名称输入。默认内存降序，可按名称或 CPU 排序。
+- 界面沿用 Orca 的弹层样式：416 px 弹层、640 px 高度上限、Resource Manager 标题、Tree / Processes 页签、CPU / Memory 摘要、Name / CPU / Memory 表头。弹层宽高分别不超过窗口的 95% 和 85%，定位前换算为像素尺寸，使底边紧贴 footer。内存按 1024 进位显示为 KB、MB、GB，未知值显示 `—`。覆盖不完整时在 tooltip 和弹层中说明已知小计。
+- Tree 合并原 Resources 与 PTYs，按 Space → Pane 展示，省略 Tab 层；当前 Space 置顶并展开。终端与 Pane 合并显示，保留非终端 Pane。展开可查看 OS 进程树、PID/PPID 和采样年龄，顶部保留内存趋势。Tab 信息仅用于内部归属解析。资源按 OS PPID 归属；Core 的逻辑 parent 只影响展示位置。嵌套终端根、重复根与分组汇总按进程身份去重。
+- Processes 将受管终端及其 OS 子进程铺平，一行一个进程，无需展开 Space 或 Pane。列为 Name / PID / CPU / Memory，按名称、PID、CPU、内存排序。默认内存降序，PID 升序；悬停显示机器、PPID、启动身份与内存口径。使用已有按机器去重的快照和虚拟列表，不新增采样器，也不触发端口或全机进程扫描。
+- 两页均移除固定搜索框。弹层中直接键入字符即可过滤，搜索期间显示当前关键词；Backspace 删除字符。空格分隔多个关键词，忽略大小写，每个关键词都须命中同一行或其所属路径，可以跨名称、机器、PID/PPID、CPU、内存等字段匹配。CPU、内存按显示格式匹配，如 `worker 12.5% 1.0 MB`；PID 和端口均支持子串匹配。Tree 自动展开命中路径并保留 OS 父进程链，切换页签清空搜索。方向键导航，Enter 展开、折叠；空格用于分词，`/` 作为普通搜索字符。
+- Tree 的 Ports 开关默认关闭。开启后，搜索可匹配监听地址、端口和 `TCP LISTEN`，并补充全机监听及未归属 Pane 的 Other processes。关闭后隐藏缓存端口行，保留关键词并仅按其他字段匹配。默认内存降序，可按名称或 CPU 排序。
 - 活跃应用每秒采集 CPU 和内存，同机请求合并，最多并发两台机器；失活暂停采集，恢复后重新建立 CPU 基线。弹层关闭时 footer 继续采样。关闭所属 View 才取消定时器、释放句柄并忽略迟到结果。footer 和弹层的显示内容未变时，不因新采样主动重绘；悬停时更新 footer 的 CPU 提示。
-- 监听端口只在 PTYs 页打开时采集，每 5 秒一次。默认只读受管进程的 FD；全机端口搜索成本更高，只在端口筛选期间启用。输入条件合并到下一次采样，不逐按键执行扫描。监听记录保留自己的进程元数据及启动身份，避免 PID 复用后误挂旧端口。
+- 监听端口只在弹层的 Tree 页可见且 Ports 开启时采集，每 5 秒一次。默认只读受管进程的 FD；全机监听搜索成本更高，仅在 Ports 开启且存在非空关键词时启用。切到 Processes 或关闭弹层后暂停端口采集。输入条件合并到下一次采样，不逐按键执行扫描。监听记录保留自己的进程元数据及启动身份，避免 PID 复用后误挂旧端口。
 - CPU 使用相邻累计 CPU 时间与单调时钟差计算，100% 表示一个核心，可超过 100%。首次、PID 复用、计数回退或间隔超过 3 秒时显示未知。macOS 主内存列使用 footprint，RSS 留在详情；Linux 使用 RSS，Windows 使用 Working Set。共享页仍可能重复计入，不代表主机物理内存占用。
 
 | 平台 | 采集方式 | 验证范围 |
@@ -211,7 +212,7 @@ Git Graph 的双次 `⌘⇧G` 已由预设管理。若还需要独立的显示/�
 
 ```sh
 herdr-app do layout.switch '{"name":"main"}'
-node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs uninstall
+node oh-my-herdr.mjs uninstall
 ```
 
 卸载移除归属记录中的未修改文件，并按上述规则恢复快捷键。遇到修改过的受管文件时停止；非受管配置、生成文件和状态保留。安装器不自动切布局，因此卸载后引用这些 Mods 的其他个人布局需要自行调整。
@@ -246,8 +247,8 @@ Open With 在打开菜单或点击主按钮时固定目标。它从当前终端 
 运行文件生命周期、Agents 标题、Agent Launcher、Open With、Graph 行内展开和资源监控回归检查：
 
 ```sh
-node desktop/extensions/oh-my-herdr/scripts/build-resource-helper.mjs
-node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/tabs-professional.test.mjs desktop/extensions/oh-my-herdr/agents-professional.test.mjs desktop/extensions/oh-my-herdr/agent-launcher.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs desktop/extensions/oh-my-herdr/git-graph.test.mjs desktop/extensions/oh-my-herdr/resource-monitor.test.mjs desktop/extensions/oh-my-herdr/resource-monitor-view.test.mjs desktop/extensions/oh-my-herdr/resource-native.test.mjs
+node scripts/build-resource-helper.mjs
+node --test *.test.mjs
 ```
 
 在隔离应用目录中安装并运行 `check`。要验证完整界面，还需要用独立的 `HERDR_APP_HOME` 和隔离 Core 会话启动真实应用；仅隔离应用 home 不代表 Core 终端和空间已隔离。

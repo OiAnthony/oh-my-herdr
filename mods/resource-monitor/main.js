@@ -1,30 +1,23 @@
 import { View, div, svg, PathBuilder } from "gpui-kit";
-import { Button, Input, InputState, Popover, Scrollbar, Tab, Tabs, VirtualListScrollHandle, h_flex, v_flex, v_virtual_list } from "gpui-base";
+import { Button, Popover, Scrollbar, Tab, Tabs, Toggle, VirtualListScrollHandle, h_flex, v_flex, v_virtual_list } from "gpui-base";
 import { agents, appHome, exec, focused, machines, panes, props, spaces, terminals, theme, window as appWindow } from "herdr";
 import { createCollector } from "./collect.js";
 import { buildResources, MemoryHistory } from "./model.js";
 import { buildResourceTree, processRows, resourceRows } from "./tree.js";
+import { bytes, cpu, footerCpu, footerCpuColor, endpoint, clean } from "./format.js";
 
 const ROW = 28;
 const LIST = "resource-monitor-rows";
 const icon = name => svg(`mods/workspace-chrome/${name}.svg`).size(13).flex_none();
 const machineOf = terminal => terminal.machine ?? (terminal.address?.includes("/") ? terminal.address.slice(0, terminal.address.indexOf("/")) : null);
-const bytes = value => {
-  if (!Number.isFinite(value)) return "—";
-  if (value < 1024 ** 2) return `${Math.round(value / 1024)} KB`;
-  if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`;
-  return `${(value / 1024 ** 3).toFixed(2)} GB`;
-};
-const cpu = value => Number.isFinite(value) ? `${value.toFixed(1)}%` : "—";
 const age = (at, now) => at ? `${Math.max(0, Math.floor((now - at) / 1000))}s ago` : "Not sampled";
-const endpoint = port => `${port.family === "ipv6" ? `[${port.address}]` : port.address}:${port.port}`;
-const clean = text => String(text ?? "").replace(/[\u0000-\u001f\u007f]/g, " ");
 
 export default class ResourceMonitor extends View {
   init(_props, cx) {
     this.open = Boolean(props()?.open);
     this.hovered = false;
-    this.tab = "resources";
+    this.tab = "tree";
+    this.showPorts = false;
     this.closed = false;
     this.generation = 0;
     this.collector = createCollector(exec, platform => `${appHome()}/mods/resource-monitor/bin/herdr-resource-sample${platform === "windows" ? ".exe" : ""}`);
@@ -42,24 +35,17 @@ export default class ResourceMonitor extends View {
     this.selected = null;
     this.revealSearch = false;
     this.now = Date.now();
-    this.focusedInputs = new Set();
+    this.query = "";
+    this.escapeDown = false;
     this.signature = null;
     this.handle = cx.focus_handle();
+    // Popover handles these as actions before raw key events reach this view.
+    cx.bind_keys([
+      { keystroke: "escape", action: "resource_monitor_escape", context: "ResourceManager" },
+      { keystroke: "space", action: "resource_monitor_space", context: "ResourceManager" },
+      { keystroke: "enter", action: "resource_monitor_enter", context: "ResourceManager" }
+    ]);
     this.scroll = VirtualListScrollHandle.new();
-    this.filters = {
-      name: InputState.new({ placeholder: "Name" }),
-      pid: InputState.new({ placeholder: "PID" }),
-      port: InputState.new({ placeholder: "Port" })
-    };
-    for (const [name, input] of Object.entries(this.filters)) {
-      input.on("change", (_e, cx) => {
-        this.flatten(true);
-        if (name === "port") this.portsAt.clear();
-        cx.notify();
-      });
-      input.on("focus", () => { this.focusedInputs.add(name); });
-      input.on("blur", () => { this.focusedInputs.delete(name); });
-    }
     this.currentSpace = focused()?.space ?? spaces().find(s => s.active)?.id ?? null;
     this.refresh(cx);
     this.schedule(cx);
@@ -88,7 +74,6 @@ export default class ResourceMonitor extends View {
     this.snapshots.clear();
     this.handle?.release();
     this.scroll?.release();
-    for (const input of Object.values(this.filters ?? {})) input.release();
   }
 
   rebuild() {
@@ -171,7 +156,7 @@ export default class ResourceMonitor extends View {
       const connection = this.connections.get(key);
       const token = {};
       const roots = terminals().filter(t => t.state === "live" && (machineOf(t) ?? "") === key).map(t => t.pid);
-      const ports = this.open && this.tab === "terminals" && Date.now() - (this.portsAt.get(key) ?? 0) >= 5000;
+      const ports = this.open && this.tab === "tree" && this.showPorts && Date.now() - (this.portsAt.get(key) ?? 0) >= 5000;
       if (ports) this.portsAt.set(key, Date.now());
       this.inflight.set(key, token);
       cx.spawn(async cx => {
@@ -211,17 +196,18 @@ export default class ResourceMonitor extends View {
   }
 
   flatten(reveal = false) {
-    const filters = Object.fromEntries(Object.entries(this.filters).map(([name, input]) => [name, input.value().trim()]));
-    this.searching = Object.values(filters).some(Boolean);
-    this.portSearch = this.tab === "terminals" && Boolean(filters.port);
+    this.searching = this.query.length > 0;
+    this.portSearch = this.tab === "tree" && this.showPorts && Boolean(this.query.trim());
     if (reveal) this.revealSearch = this.searching;
-    this.tree = this.tab === "processes" ? [] : buildResourceTree(this.nodes, { filters, snapshots: this.snapshots });
+    this.tree = this.tab === "processes" ? [] : buildResourceTree(this.nodes,
+      { query: this.query, showPorts: this.showPorts, snapshots: this.snapshots });
     if (this.tab !== "processes" && (reveal || (this.searching && this.revealSearch))) {
       const visit = node => { this.expanded.add(node.id); node.children.forEach(visit); };
       this.tree.forEach(visit);
     }
-    this.rows = this.tab === "processes" ? processRows(this.nodes, { filters, sort: this.sort })
-      : resourceRows(this.tree, { expanded: this.expanded, sort: this.sort, currentSpace: this.currentSpace });
+    this.rows = this.tab === "processes" ? processRows(this.nodes, { query: this.query, sort: this.sort })
+      : resourceRows(this.tree, { expanded: this.expanded, sort: this.sort, currentSpace: this.currentSpace })
+        .filter(row => this.showPorts || row.type !== "port");
     if (!this.rows.some(row => row.id === this.selected)) this.selected = this.rows[0]?.id ?? null;
   }
 
@@ -239,20 +225,36 @@ export default class ResourceMonitor extends View {
     cx.notify();
   }
 
-  key(event, cx) {
-    if (event.key === "escape") {
-      this.open = false;
+  escape(cx) {
+    if (!this.escapeDown) {
+      this.escapeDown = true;
+      if (this.searching) { this.query = ""; this.flatten(); }
+      else this.open = false;
       cx.notify();
+    }
+    cx.stop_propagation();
+  }
+
+  key(event, cx) {
+    if (event.key === "escape") return this.escape(cx);
+    if (event.modifiers.control || event.modifiers.platform || event.modifiers.alt) return;
+    const character = event.key === "space" ? " " : event.key_char;
+    if (event.key === "backspace" || (character && !/[\u0000-\u001f\u007f]/.test(character))) {
+      this.query = event.key === "backspace" ? [...this.query].slice(0, -1).join("") : this.query + character;
+      const wasPortSearch = this.portSearch;
+      this.flatten(true);
+      if (this.portSearch !== wasPortSearch) this.portsAt.clear();
+      if (this.rows.length) this.scroll.scroll_to_item(0);
       cx.stop_propagation();
+      cx.notify();
       return;
     }
-    if (this.focusedInputs.size || event.modifiers.control || event.modifiers.platform || event.modifiers.alt) return;
     const index = this.rows.findIndex(row => row.id === this.selected);
     if (event.key === "down" || event.key === "up") {
       const next = Math.min(Math.max(0, index + (event.key === "down" ? 1 : -1)), this.rows.length - 1);
       this.selected = this.rows[next]?.id ?? null;
       if (next >= 0) this.scroll.scroll_to_item(next);
-    } else if (event.key === "enter" || event.key === "space") this.activate(this.selected, cx);
+    } else if (event.key === "enter") this.activate(this.selected, cx);
     else if (event.key === "right" || event.key === "left") {
       const row = this.rows[index];
       if (row?.type === "node") {
@@ -261,8 +263,7 @@ export default class ResourceMonitor extends View {
         else this.expanded.delete(row.id);
         this.flatten();
       }
-    } else if (event.key === "/") this.filters.name.focus();
-    else return;
+    } else return;
     cx.stop_propagation();
     cx.notify();
   }
@@ -299,7 +300,7 @@ export default class ResourceMonitor extends View {
     if (type === "detail") {
       const ports = this.snapshots.get(node.machine ?? "")?.listeners;
       const detail = [node.directChildren === null ? "Child counts unknown" : `${node.directChildren} children · ${node.descendants} descendants`,
-        this.tab === "terminals" ? (ports?.state === "ready" ? `${node.ports.length} listeners` : ports?.message) : null,
+        this.showPorts ? (ports?.state === "ready" ? `${node.ports.length} listeners` : ports?.message) : null,
         node.message].filter(Boolean).join(" · ");
       return base.text_color(t.muted).child(name.tooltip(clean(detail)).child(clean(detail)));
     }
@@ -337,7 +338,7 @@ export default class ResourceMonitor extends View {
 
   footerSignature() {
     const s = this.summary();
-    return JSON.stringify([s.machine, cpu(s.cpu), bytes(s.memory), Boolean(s.root?.unknown), s.root?.message]);
+    return JSON.stringify([s.machine, footerCpu(s.cpu), bytes(s.memory), Boolean(s.root?.unknown), s.root?.message]);
   }
 
   panelSignature() {
@@ -354,56 +355,75 @@ export default class ResourceMonitor extends View {
           p && [p.pid, p.ppid, p.start, p.name, cpu(p.cpu), bytes(p.memory), bytes(p.resident)],
           row.port && endpoint(row.port)];
       }),
-      this.tab === "terminals" && [
+      this.tab === "tree" && [
         s.root && this.history.get(s.root),
-        [...this.snapshots.values()].map(s => [s.listeners?.state, s.listeners?.scope, s.listeners?.message])
+        this.showPorts && [...this.snapshots.values()].map(s => [s.listeners?.state, s.listeners?.scope, s.listeners?.message])
       ]
     ]);
   }
 
   panel(cx) {
     const t = theme(), summary = this.summary();
+    const viewport = globalThis.window.viewport_size();
     const tab = (id, label) => Tab.new(`resource-tab-${id}`).selected(this.tab === id)
+      .accessibility_label(label)
       .h(28).px(8).text_size(11).border_b(2).border_color(this.tab === id ? t.accent : t.popover)
       .text_color(this.tab === id ? t.foreground : t.muted).hover(el => el.text_color(t.foreground))
       .on_click((_e, cx) => {
         this.tab = id; this.portsAt.clear();
         if (id !== "processes" && this.sort === "pid") this.sort = "memory";
-        for (const input of Object.values(this.filters)) input.set_value("");
+        this.query = "";
         this.flatten();
+        this.handle.focus();
         if (id !== "processes") this.refresh(cx);
         cx.notify();
       }).child(h_flex().gap(6).items_center()
-        .child(svg(`mods/resource-monitor/${id === "terminals" ? "terminal" : "activity"}.svg`).size(12))
-        .child(label).when(id === "terminals", el => el.child(div().px(4).rounded(4).bg(t.selected).text_size(10).child(String(summary.count)))));
+        .child(svg(`mods/resource-monitor/${id === "tree" ? "terminal" : "activity"}.svg`).size(12))
+        .child(label).when(id === "tree", el => el.child(div().px(4).rounded(4).bg(t.selected).text_size(10).child(String(summary.count)))));
     const list = v_flex().flex_1().min_h(0).relative()
       .child(v_virtual_list(LIST, this.rows.length, ROW, index => this.rows[index].id,
         range => this.rows.slice(range.start, range.end).map(row => this.row(row, t)))
         .size_full().track_scroll(this.scroll).on_item_click((id, cx) => this.activate(id, cx)))
       .child(Scrollbar.vertical(LIST).viewport_from_layout().absolute().inset_0());
-    return v_flex().id("resource-manager").w(416).max_w("95%").h(640).max_h("85%")
+    return v_flex().id("resource-manager")
+      .w(Math.min(416, viewport.width * 0.95)).h(Math.min(640, viewport.height * 0.85))
       .track_focus(this.handle).bg(t.popover).text_color(t.foreground).text_size(11).rounded(8)
       .border_1().border_color(t.border).overflow_hidden().role("group").accessibility_label("Resource Manager")
+      .key_context("ResourceManager")
+      .on_action("resource_monitor_escape", (_e, cx) => this.escape(cx))
+      .on_action("resource_monitor_space", (_e, cx) => this.key({ key: "space", modifiers: {} }, cx))
+      .on_action("resource_monitor_enter", (_e, cx) => this.key({ key: "enter", modifiers: {} }, cx))
       .on_key_down((e, cx) => this.key(e, cx))
+      .on_key_up(e => { if (e.key === "escape") this.escapeDown = false; })
       .child(h_flex().px(12).h(32).flex_none().gap(6).items_center().border_b(1).border_color(t.border)
         .child(svg("mods/resource-monitor/memory.svg").size(12).text_color(t.muted))
         .child(div().flex_1().font_medium().child("Resource Manager"))
         .child(this.button("resource-refresh", "Refresh", (_e, cx) => { this.portsAt.clear(); this.refresh(cx); }))
         .child(this.button("resource-close", "Close", (_e, cx) => { this.open = false; cx.notify(); })))
-      .child(Tabs.new("resource-tabs").flex().flex_row().px(12).py(4).gap(4).flex_none()
-        .child(tab("resources", "Resources")).child(tab("terminals", "PTYs")).child(tab("processes", "Processes")))
+      .child(h_flex().px(12).py(4).gap(4).flex_none()
+        .child(Tabs.new("resource-tabs").flex().flex_row().gap(4)
+          .child(tab("tree", "Tree")).child(tab("processes", "Processes")))
+        .child(div().flex_1())
+        .when(this.tab === "tree", el => el.child(Toggle.new("resource-show-ports").pressed(this.showPorts)
+          .h(24).px(6).rounded(4).text_size(11).text_color(this.showPorts ? t.accent : t.muted)
+          .bg(this.showPorts ? t.selected : t.popover).hover(el => el.bg(t.hover))
+          .tab_index(0).accessibility_label("Show listening ports")
+          .on_change((value, cx) => {
+            this.showPorts = value;
+            this.portsAt.clear();
+            this.flatten();
+            if (value) this.refresh(cx);
+            cx.notify();
+          }).child(this.showPorts ? "Ports on" : "Ports off"))))
       .child(v_flex().px(12).py(8).gap(4).border_b(1).border_color(t.border).flex_none()
         .child(h_flex().gap(12).items_center().child(cpu(summary.cpu)).child(`${bytes(summary.memory)} ${summary.root?.metric ?? "memory"}`)
-          .when(this.tab === "terminals" && Boolean(summary.root), el => el.child(this.spark(summary.root, t))))
+          .when(this.tab === "tree" && Boolean(summary.root), el => el.child(this.spark(summary.root, t))))
         .child(div().text_color(t.muted).tooltip("Combined process load; 100% equals one CPU core. Sampling pauses when the app is inactive.")
           .child(`${summary.machine ?? "This computer"} · ${summary.root?.unknown ? "Known subtotal · " : ""}${age(summary.root?.at, this.now)}`)))
-      .when(this.tab !== "resources", el => el.child(h_flex().px(12).py(6).gap(4).flex_none()
-        .children(Object.entries(this.filters).filter(([name]) => this.tab === "terminals" || name !== "port")
-          .map(([name, input]) => div().when(name === "name", el => el.flex_1().min_w(0))
-          .when(name !== "name", el => el.w(64).flex_none())
-          .child(Input.new(input).w_full().h(26).px(6).rounded(4).border_1().border_color(t.input).bg(t.background)
-            .accessibility_label(name === "name" ? (this.tab === "processes" ? "Filter process names or machines" : "Filter names or addresses")
-              : name === "pid" ? "Filter exact process ID" : "Filter exact TCP listening port"))))))
+      .when(this.searching, el => el.child(h_flex().px(12).py(6).gap(8).flex_none().items_center()
+        .accessibility_label(`Filter: ${this.query}`)
+        .child(div().flex_1().min_w(0).truncate().tooltip(this.query).child(`Filter: ${this.query}`))
+        .child(div().text_color(t.muted).child("Esc to clear"))))
       .child(h_flex().px(12).h(26).gap(8).items_center().bg(t.chrome).border_b(1).border_color(t.border).flex_none()
         .children([["name", "Name", null], ...(this.tab === "processes" ? [["pid", "PID", 44]] : []),
           ["cpu", "CPU", 52], ["memory", "Memory", 76]].map(([id, label, width]) =>
@@ -416,33 +436,38 @@ export default class ResourceMonitor extends View {
         .child(this.searching ? "No matching resources" : this.tab === "processes" ? "No sampled processes" : "No running terminals")))
       .child(v_flex().px(12).py(8).border_t(1).border_color(t.border).gap(3).text_color(t.muted).flex_none()
         .when(Boolean(summary.root?.message), el => el.child(clean(summary.root.message)))
-        .when(this.tab === "terminals" && [...this.snapshots.values()].some(s => s.listeners?.state !== "ready" ||
+        .when(this.tab === "tree" && this.showPorts && [...this.snapshots.values()].some(s => s.listeners?.state !== "ready" ||
           (this.portSearch && s.listeners.scope !== "all")), el => el.child("Listener coverage incomplete"))
-        .child(this.tab === "terminals" ? "Read-only · Listening ports are not verified web services"
-          : this.tab === "processes" ? "Read-only · Managed terminals and their child processes" : "Read-only · Expand a row for process details"));
+        .child(this.tab === "tree" && this.showPorts ? "Read-only · Listening ports are not verified web services"
+          : this.tab === "processes" ? "Read-only · Managed terminals and their child processes" : "Read-only · Expand a row for process details")
+        .child("Type to filter · Space separates keywords · Esc to close"));
   }
 
   render(cx) {
     this.now = Date.now();
     this.rebuild();
     const t = theme(), summary = this.summary();
-    const memory = bytes(summary.memory), load = cpu(summary.cpu);
+    const memory = bytes(summary.memory), load = footerCpu(summary.cpu), loadColor = footerCpuColor(summary.cpu, t);
     const label = `CPU ${load} · memory ${memory}`;
-    const trigger = Button.new("resource-status-trigger").h(22).px(4).rounded(4).text_size(11).text_color(t.muted)
+    const font = appWindow()?.platform === "macos" ? "Menlo" : appWindow()?.platform === "windows" ? "Consolas" : "monospace";
+    const trigger = Button.new("resource-status-trigger").w(152).h(22).px(4).flex_none().justify_start().rounded(4).text_size(11).text_color(t.muted)
       .tab_index(0).accessibility_label(`Resources: ${label}`)
-      .tooltip(`${summary.machine ?? "This computer"} · ${summary.root?.metric ?? "memory"} ${bytes(summary.memory)} · CPU ${cpu(summary.cpu)}${summary.root?.unknown ? " · Coverage incomplete" : ""}`)
+      .tooltip(`${summary.machine ?? "This computer"} · ${summary.root?.metric ?? "memory"} ${memory} · CPU ${load}${summary.root?.unknown ? " · Coverage incomplete" : ""}`)
       .on_hover((hovered, cx) => { this.hovered = hovered; cx.notify(); })
       .hover(el => el.bg(t.hover).text_color(t.foreground))
-      .child(h_flex().gap(6).items_center()
-        .child(svg("mods/resource-monitor/activity.svg").size(12)).child(load)
-        .child(div().text_color(t.dim).child("·"))
-        .child(svg("mods/resource-monitor/memory.svg").size(12))
-        .child(memory));
+      .child(h_flex().gap(0).items_center().flex_none()
+        .child(h_flex().gap(3).items_center().flex_none()
+          .child(svg("mods/resource-monitor/activity.svg").size(12).flex_none().text_color(loadColor))
+          .child(div().flex_none().font_family(font).text_left().text_color(loadColor).child(load)))
+        .child(div().flex_none().font_family(font).text_color(t.dim).child(" · "))
+        .child(h_flex().gap(3).items_center().flex_none()
+          .child(svg("mods/resource-monitor/memory.svg").size(12).flex_none())
+          .child(div().flex_none().font_family(font).text_left().child(memory))));
     return h_flex().size_full().px(6).items_center().bg(t.chrome).border_t(1).border_color(t.border)
       .child(Popover.new("resource-status-popover").open(this.open).anchor("bottom_right").track_focus(this.handle).overlay_closable(true)
         .on_open_change((open, cx) => {
           this.open = open;
-          if (open) { this.portsAt.clear(); this.refresh(cx); }
+          if (open) { this.escapeDown = false; this.portsAt.clear(); this.refresh(cx); }
           cx.notify();
         }).trigger(trigger).when(this.open, el => el.content(this.panel(cx))));
   }
