@@ -22,49 +22,49 @@ fn cpu_seconds(ticks: f64) -> Option<f64> {
         .map(|scale| ticks * scale)
 }
 
-pub fn topology(
-    roots: &[u32],
-    include_unmanaged: bool,
-) -> Result<(Vec<Process>, bool, bool), String> {
+pub fn topology(roots: &[u32], system: bool) -> Result<(Vec<Process>, bool), String> {
     let mut complete = true;
     let mut rows = Vec::new();
     let mut seen = HashSet::new();
-    let mut pending = roots.to_vec();
+    let mut pending = if system {
+        pids_by_type(ProcFilter::All).map_err(|e| e.to_string())?
+    } else {
+        roots.to_vec()
+    };
     while let Some(pid) = pending.pop() {
-        if !seen.insert(pid) || pid == 0 || pid == std::process::id() {
+        if !seen.insert(pid) || pid == 0 || (pid == std::process::id() && !system) {
             continue;
         }
-        // libproc distinguishes an empty child list from failure through errno.
-        unsafe {
-            *libc::__error() = 0;
-        }
-        match pids_by_type(ProcFilter::ByParentProcess { ppid: pid }) {
-            Ok(children) => pending.extend(children),
-            Err(_) => complete = false,
+        if !system {
+            // libproc distinguishes an empty child list from failure through errno.
+            unsafe {
+                *libc::__error() = 0;
+            }
+            match pids_by_type(ProcFilter::ByParentProcess { ppid: pid }) {
+                Ok(children) => pending.extend(children),
+                Err(_) => complete = false,
+            }
         }
         match metadata(pid) {
             Some(row) => rows.push(row),
-            None => complete = false,
-        }
-    }
-    let mut listener_complete = complete;
-    if include_unmanaged {
-        match pids_by_type(ProcFilter::All) {
-            Ok(pids) => {
-                for pid in pids {
-                    if seen.contains(&pid) || pid == 0 || pid == std::process::id() {
-                        continue;
-                    }
-                    match metadata(pid) {
-                        Some(row) => rows.push(row),
-                        None => listener_complete = false,
-                    }
+            None => {
+                complete = false;
+                if system {
+                    // Preserve enumerated PIDs even when metadata access is denied.
+                    rows.push(Process {
+                        pid,
+                        ppid: 0,
+                        name: String::new(),
+                        start: None,
+                        seconds: None,
+                        memory: None,
+                        footprint: None,
+                    });
                 }
             }
-            Err(_) => listener_complete = false,
         }
     }
-    Ok((rows, complete, listener_complete))
+    Ok((rows, complete))
 }
 
 fn metadata(pid: u32) -> Option<Process> {
@@ -159,6 +159,7 @@ pub fn listeners(rows: &[Process], _selected: &HashSet<u32>) -> Result<Value, St
                 continue;
             }
         };
+        let first = result.len();
         for fd in fds {
             if !matches!(fd.proc_fdtype.into(), ProcFDType::Socket) {
                 continue;
@@ -199,6 +200,18 @@ pub fn listeners(rows: &[Process], _selected: &HashSet<u32>) -> Result<Value, St
                 result.push(json!({"pid":pid,"family":family,"address":address,"port":port,
                     "protocol":"tcp","socket":if socket.psi.soi_so>0 {Some(format!("socket:{}", socket.psi.soi_so))} else {None}}));
             }
+        }
+        // Socket enumeration races with exit/PID reuse just like accounting does.
+        let identity_matches = pidinfo::<BSDInfo>(pid, 0).ok().is_some_and(|info| {
+            row.start.as_deref()
+                == Some(&format!(
+                    "{}:{}",
+                    info.pbi_start_tvsec, info.pbi_start_tvusec
+                ))
+        });
+        if !identity_matches {
+            result.truncate(first);
+            complete = false;
         }
     }
     Ok(json!({"rows":result,"complete":complete}))

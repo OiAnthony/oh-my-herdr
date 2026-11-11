@@ -70,10 +70,7 @@ extern "system" {
 fn ticks(t: &FileTime) -> u64 {
     (t.high as u64) << 32 | t.low as u64
 }
-pub fn topology(
-    _roots: &[u32],
-    _include_unmanaged: bool,
-) -> Result<(Vec<Process>, bool, bool), String> {
+pub fn topology(_roots: &[u32], system: bool) -> Result<(Vec<Process>, bool), String> {
     unsafe {
         let handle = CreateToolhelp32Snapshot(2, 0);
         if handle as isize == -1 {
@@ -84,7 +81,7 @@ pub fn topology(
         let mut rows = Vec::new();
         let mut next = Process32FirstW(handle, &mut e);
         while next != 0 {
-            if e.pid > 0 && e.pid != std::process::id() {
+            if e.pid > 0 && (e.pid != std::process::id() || system) {
                 let end = e.name.iter().position(|c| *c == 0).unwrap_or(e.name.len());
                 rows.push(Process {
                     pid: e.pid,
@@ -103,7 +100,7 @@ pub fn topology(
         if rows.is_empty() {
             Err("Process snapshot was empty".into())
         } else {
-            Ok((rows, complete, complete))
+            Ok((rows, complete))
         }
     }
 }
@@ -119,10 +116,17 @@ pub fn metrics(row: &mut Process) {
             FileTime::default(),
             FileTime::default(),
         );
-        if GetProcessTimes(handle, &mut c, &mut e, &mut k, &mut u) != 0 {
-            row.start = Some(ticks(&c).to_string());
-            row.seconds = Some((ticks(&k) as f64 + ticks(&u) as f64) / 1e7);
+        if GetProcessTimes(handle, &mut c, &mut e, &mut k, &mut u) == 0 {
+            CloseHandle(handle);
+            return;
         }
+        let start = ticks(&c).to_string();
+        if row.start.as_ref().is_some_and(|old| old != &start) {
+            CloseHandle(handle);
+            return;
+        }
+        row.start = Some(start);
+        row.seconds = Some((ticks(&k) as f64 + ticks(&u) as f64) / 1e7);
         let mut m = Memory::default();
         m.size = mem::size_of::<Memory>() as u32;
         if K32GetProcessMemoryInfo(handle, &mut m, m.size) != 0 {
@@ -214,5 +218,41 @@ pub fn listeners(_rows: &[Process], _selected: &HashSet<u32>) -> Result<Value, S
             }
         }
     }
-    Ok(json!({"rows":rows,"complete":true}))
+    // The TCP table supplies only a PID; validate its current creation identity
+    // before joining it to previously sampled process metadata.
+    let mut complete = true;
+    let identities: HashSet<_> = _rows
+        .iter()
+        .filter_map(|row| {
+            let matches = unsafe {
+                let handle = OpenProcess(0x1000, 0, row.pid);
+                if handle.is_null() {
+                    false
+                } else {
+                    let (mut c, mut e, mut k, mut u) = (
+                        FileTime::default(),
+                        FileTime::default(),
+                        FileTime::default(),
+                        FileTime::default(),
+                    );
+                    let ok = GetProcessTimes(handle, &mut c, &mut e, &mut k, &mut u) != 0;
+                    CloseHandle(handle);
+                    ok && row.start.as_deref().and_then(|s| s.parse::<u64>().ok())
+                        == Some(ticks(&c))
+                }
+            };
+            if matches {
+                Some(row.pid)
+            } else {
+                complete = false;
+                None
+            }
+        })
+        .collect();
+    rows.retain(|row| {
+        row["pid"]
+            .as_u64()
+            .is_some_and(|pid| identities.contains(&(pid as u32)))
+    });
+    Ok(json!({"rows":rows,"complete":complete}))
 }

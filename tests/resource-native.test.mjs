@@ -5,11 +5,12 @@ import { once } from "node:events";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
+import { createServer } from "node:net";
 import { parseNative } from "../mods/resource-monitor/collect.js";
 
 const helper = fileURLToPath(new URL(`../mods/resource-monitor/bin/herdr-resource-sample${process.platform === "win32" ? ".exe" : ""}`, import.meta.url));
-const sample = (roots = [process.pid], ports = false) => JSON.parse(execFileSync(helper,
-  [`--roots=${roots.join(",")}`, ...(ports ? [ports === "all" ? "--all-ports" : "--ports"] : [])], { encoding: "utf8", timeout: 3000 }));
+const sample = (roots = [process.pid], ports = false, scope = "herdr") => JSON.parse(execFileSync(helper,
+  [`--roots=${roots.join(",")}`, `--scope=${scope}`, ...(ports ? ["--ports"] : [])], { encoding: "utf8", timeout: 10000 }));
 
 test("native CPU accounting agrees with measured busy-loop CPU time", () => {
   const before = sample(), old = before.rows.find(p => p.pid === process.pid);
@@ -31,6 +32,14 @@ test("native CPU accounting agrees with measured busy-loop CPU time", () => {
 });
 
 test("native topology deduplicates nested roots and finds live IPv4/IPv6 listeners", async t => {
+  // This process is not a descendant of the child's managed terminal root.
+  const unrelated = createServer();
+  await new Promise((resolve, reject) => {
+    unrelated.once("error", reject);
+    unrelated.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(() => new Promise(resolve => unrelated.close(resolve)));
+  const unrelatedPort = unrelated.address().port;
   const child = spawn(process.execPath, ["-e", `
     const net = require("node:net");
     (async () => {
@@ -56,14 +65,36 @@ test("native topology deduplicates nested roots and finds live IPv4/IPv6 listene
   }
   assert.equal(JSON.stringify(snapshot).includes("resource-monitor-private-argv-marker"), false);
   assert.deepEqual(sample([], true).listeners.rows, []);
-  const unassigned = sample([], "all");
-  assert.equal(unassigned.listeners.scope, "all");
-  assert.ok(unassigned.listeners.rows.some(p => p.pid === child.pid && p.port === ports[0]));
+  const managed = sample([child.pid], true);
+  assert.equal(managed.listeners.scope, "managed");
+  assert.ok(managed.rows.some(p => p.pid === child.pid));
+  assert.equal(managed.rows.some(p => p.pid === process.pid), false);
+  assert.equal(managed.listeners.rows.some(p => p.pid === process.pid && p.port === unrelatedPort), false);
+  const systemWithoutPorts = sample([], false, "system");
+  const own = systemWithoutPorts.rows.find(p => p.pid === process.pid);
+  assert.ok(own?.start);
+  assert.ok(own.memory > 0);
+  assert.ok(Number.isFinite(own.seconds));
+  assert.equal(systemWithoutPorts.listeners, null);
+  assert.equal(typeof systemWithoutPorts.topologyComplete, "boolean");
+  assert.equal(new Set(systemWithoutPorts.rows.map(p => p.pid)).size, systemWithoutPorts.rows.length);
+  const system = sample([], true, "system");
+  assert.equal(system.listeners.scope, "all");
+  assert.equal(typeof system.topologyComplete, "boolean");
+  if (!system.topologyComplete) assert.equal(system.listeners.complete, false);
+  assert.ok(system.rows.find(p => p.pid === child.pid)?.memory > 0);
+  assert.ok(system.listeners.rows.some(p => p.pid === child.pid && p.port === ports[0]));
+  assert.ok(system.listeners.rows.some(p => p.pid === process.pid && p.port === unrelatedPort));
+  const systemWithRoots = sample([child.pid], false, "system");
+  assert.ok(systemWithRoots.rows.find(p => p.pid === process.pid)?.memory > 0);
+  assert.equal(JSON.stringify(system).includes("resource-monitor-private-argv-marker"), false);
 });
 
 test("native CLI rejects malformed roots and returns no managed rows for an empty root set", () => {
   assert.deepEqual(sample([]).rows, []);
-  for (const arg of ["--roots=0", "--roots=1;echo bad", "--unknown"]) {
+  const implicit = JSON.parse(execFileSync(helper, ["--roots="], { encoding: "utf8", timeout: 3000 }));
+  assert.deepEqual(implicit.rows, []);
+  for (const arg of ["--roots=0", "--roots=1;echo bad", "--unknown", "--scope=", "--scope=all", "--scope=SYSTEM"]) {
     assert.throws(() => execFileSync(helper, [arg], { stdio: "pipe", timeout: 3000 }), e => e.status === 1);
   }
 });

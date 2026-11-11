@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildResources, MemoryHistory, binding } from "../mods/resource-monitor/model.js";
-import { buildResourceTree, processRows, resourceRows } from "../mods/resource-monitor/tree.js";
+import { buildResources, buildSystemResources, MemoryHistory, binding } from "../mods/resource-monitor/model.js";
+import { buildResourceTree, processRows, resourceRows, portRows } from "../mods/resource-monitor/tree.js";
 import { parseNative, createCollector } from "../mods/resource-monitor/collect.js";
 
 const at = 100000;
@@ -153,26 +153,15 @@ test("PID and port keywords match one process, accept substrings and retain its 
   assert.equal(resourceRows(tree).length, 1);
 });
 
-test("port searches include unassigned listeners, deduplicate socket repeats and preserve unknown owners", () => {
+test("port searches never expand the selected managed process scope", () => {
   const listener = { pid: 20, family: "ipv6", protocol: "tcp", address: "::", port: 8080, socket: "a" };
-  const snap = snapshot([process(10), process(1), process(20, 1, 90, { name: "outside-server" })], {
+  const snapshots = new Map([["", snapshot([process(10), process(1), process(20, 1, 90, { name: "outside-server" })], {
     listeners: channel([listener, listener, { ...listener, pid: 99, socket: "b" }], { state: "partial" })
-  });
-  const snapshots = new Map([["", snap]]);
+  })]]);
   const nodes = build([terminal("t1", 10, placed)], [], { snapshots });
   const before = structuredClone(nodes);
-  const tree = buildResourceTree(nodes, { snapshots, showPorts: true, query: "8080" });
-  const owners = all(tree).filter(node => node.kind === "process-owner");
-  assert.deepEqual(owners.map(node => node.pid), [20, 99]);
-  assert.equal(owners[0].name, "outside-server");
-  assert.equal(owners[0].ports.length, 1);
-  assert.deepEqual(owners[0].visibleProcesses.map(process => process.pid), [1, 20]);
-  assert.equal(owners[0].ports[0].binding, "all interfaces");
-  assert.equal(owners[1].memory, null);
-  assert.equal(owners[1].status, "partial");
-  assert.equal(buildResourceTree(nodes).some(node => node.name.includes("Other processes")), false);
-  assert.equal(all(buildResourceTree(nodes, { snapshots, showPorts: true, query: "outside-server 8080" }))
-    .filter(node => node.kind === "process-owner").length, 1);
+  assert.deepEqual(buildResourceTree(nodes, { snapshots, showPorts: true, query: "8080" }), []);
+  assert.deepEqual(buildResourceTree(nodes, { snapshots, showPorts: true, query: "outside-server 8080" }), []);
   assert.deepEqual(nodes, before);
 });
 
@@ -183,9 +172,8 @@ test("port results keep equal remote PIDs separate and never duplicate managed l
     ["remote", snapshot([process(10)], { machine: "remote", listeners: channel([listener]) })]]);
   const nodes = build([terminal("t1", 10, placed)], [], { snapshots, spaces });
   const tree = buildResourceTree(nodes, { snapshots, showPorts: true, query: "8080" });
-  const owners = all(tree).filter(node => node.kind === "process-owner");
-  assert.equal(owners.length, 1);
-  assert.equal(owners[0].machine, "remote");
+  assert.equal(all(tree).some(node => node.kind === "process-owner"), false);
+  assert.equal(all(tree).some(node => node.machine === "remote" && node.ports.length), false);
   assert.equal(leaf(tree, "t1").visiblePorts.length, 1);
   assert.equal(resourceRows(tree, { currentSpace: "s1" })[0].node.space, "s1");
 });
@@ -445,10 +433,10 @@ test("listener caching retains unassigned process names and never attaches an ol
   const listener = {pid: 10, family: "ipv4", protocol: "tcp", address: "127.0.0.1", port: 8080, socket: null};
   let response = native(1, "created", {listeners: {complete: true, scope: "all", rows: [listener]}});
   const collector = createCollector(async () => ({code: 0, stdout: response, stderr: ""}), () => "/helper");
-  const first = await collector.sample(null, {roots: [10], ports: true, allPorts: true});
+  const first = await collector.sample(null, {roots: [10], ports: true, scope: "system"});
   assert.equal(first.listeners.rows[0].start, "created");
   response = native(2, "reused", {monotonic: 101});
-  const next = await collector.sample(null, {roots: [10]});
+  const next = await collector.sample(null, {roots: [10], scope: "system"});
   assert.equal(next.listeners.processes[0].name, "node");
   const nodes = build([terminal("t1", 10, placed)], [], {now: next.at, snapshots: new Map([["", next]])});
   assert.deepEqual(leaf(nodes, "t1").ports, []);
@@ -498,12 +486,12 @@ test("collector coalesces concurrent requests and only asks for ports explicitly
   const first = collector.sample(null, {roots: [20, 10, 10, null]});
   const second = collector.sample(null, {roots: [10], ports: true});
   assert.equal(first, second);
-  assert.deepEqual(calls[0].slice(0, 2), ["/helper", ["--roots=10,20"]]);
+  assert.deepEqual(calls[0].slice(0, 2), ["/helper", ["--roots=10,20", "--scope=herdr"]]);
   resolve({code: 0, stdout: native(), stderr: ""});
   assert.equal((await first).processes.state, "ready");
   const third = collector.sample("remote", {roots: [10], ports: true});
   assert.equal(calls[1][0], "herdr-resource-sample");
-  assert.deepEqual(calls[1][1], ["--roots=10", "--ports"]);
+  assert.deepEqual(calls[1][1], ["--roots=10", "--scope=herdr", "--ports"]);
   assert.equal(calls[1][2].on, "remote");
   resolve({code: 0, stdout: native(), stderr: ""});
   await third;
@@ -521,4 +509,160 @@ test("invalidation ignores late success; a missing helper never launches a heavy
   assert.equal(result.processes.state, "error");
   assert.equal(result.host.total, null);
   assert.deepEqual(calls, ["/helper", "/missing"]);
+});
+
+test("system hierarchy keeps own metrics, unique machine totals and separate machine identities", () => {
+  const rows = [process(10, 0, 10), process(11, 10, 20), process(12, 11, 30), process(12, 11, 30)];
+  const snapshots = new Map([["", snapshot(rows)], ["ssh", snapshot([process(10, 0, 99)])]]);
+  const nodes = buildSystemResources({ snapshots, now: at });
+  assert.deepEqual(nodes.map(node => node.memory), [60, 99]);
+  assert.deepEqual(nodes.map(node => node.cpu), [3, 1]);
+  assert.equal(nodes[0].processes.length, 3);
+  const tree = buildResourceTree(nodes);
+  assert.equal(tree.length, 2);
+  assert.equal(tree[0].children[0].kind, "system-process");
+  assert.equal(tree[0].children[0].memory, 10);
+  assert.equal(tree[0].children[0].children[0].memory, 20);
+  assert.notEqual(tree[0].children[0].id, tree[1].children[0].id);
+  const expanded = new Set(all(tree).map(node => node.id));
+  const projected = resourceRows(tree, { expanded });
+  assert.equal(projected.filter(row => row.type === "process").length, 0);
+  assert.deepEqual(processRows(nodes, { sort: "pid" }).map(row => row.process.pid), [10, 10, 11, 12]);
+  // Full-system snapshots do not widen the unchanged managed builder.
+  const managed = build([terminal("t1", 11, placed)], [], { snapshots });
+  assert.equal(managed[0].memory, 50);
+  assert.deepEqual(managed[0].processes.map(process => process.pid), [11, 12]);
+});
+
+test("system topology retains missing parents, self cycles, longer cycles and descendants exactly once", () => {
+  const rows = [process(1, 99), process(2, 2), process(3, 4), process(4, 3), process(5, 4), process(6, 5)];
+  const nodes = buildSystemResources({ snapshots: new Map([["", snapshot(rows)]]), now: at });
+  const processes = all(nodes).filter(node => node.kind === "system-process");
+  assert.equal(processes.length, rows.length);
+  assert.equal(new Set(processes.map(node => node.pid)).size, rows.length);
+  assert.equal(nodes[0].memory, 60);
+  assert.equal(nodes[0].children.some(node => node.pid === 1), true);
+  assert.equal(nodes[0].children.some(node => node.pid === 2), true);
+  const conflict = buildSystemResources({ snapshots: new Map([["", snapshot([process(1), process(1, 0, 50), process(2, 1)])]]), now: at });
+  assert.deepEqual(conflict[0].processes.map(process => process.pid), [2]);
+  assert.equal(conflict[0].memory, 10);
+  assert.ok(conflict[0].unknown > 0);
+  assert.equal(conflict[0].historyValid, false);
+});
+
+test("system search retains OS ancestors, never duplicates process rows and ports only appear when enabled", () => {
+  const listener = { pid: 12, family: "ipv4", protocol: "tcp", address: "127.0.0.1", port: 8080 };
+  const snapshots = new Map([["", snapshot([process(10), process(11, 10), process(12, 11), process(13, 10)], { listeners: channel([listener]) })]]);
+  const nodes = buildSystemResources({ snapshots, now: at });
+  const filtered = buildResourceTree(nodes, { query: "12 8080", showPorts: true });
+  assert.deepEqual(all(filtered).filter(node => node.kind === "system-process").map(node => node.pid), [10, 11, 12]);
+  const expanded = new Set(all(nodes).map(node => node.id));
+  assert.equal(resourceRows(filtered, { expanded }).filter(row => row.type === "port").length, 1);
+  assert.equal(resourceRows(buildResourceTree(nodes), { expanded }).filter(row => row.type === "port").length, 0);
+  assert.equal(resourceRows(buildResourceTree(nodes, { showPorts: true }), { expanded }).filter(row => row.type === "port").length, 1);
+  assert.deepEqual(buildResourceTree(nodes, { query: "8080" }), []);
+  assert.deepEqual(buildResourceTree(nodes, { query: "13 8080", showPorts: true }), []);
+});
+
+test("system unknown, stale and failed metrics never become valid sums or history", () => {
+  const make = (rows, extra = {}, now = at) => buildSystemResources({ snapshots: new Map([["", snapshot(rows, extra)]]), now });
+  const unknown = make([process(10, 0, null, { cpu: null }), process(11, 10, 20)]);
+  assert.equal(unknown[0].memory, 20);
+  assert.equal(unknown[0].cpu, 1);
+  assert.equal(unknown[0].historyValid, false);
+  assert.equal(unknown[0].children[0].memory, null);
+  assert.ok(unknown[0].unknown > 0);
+  const good = make([process(10)]), history = new MemoryHistory();
+  history.update(good, at);
+  for (const nodes of [make([process(10)], {}, at + 10001),
+    make([], { processes: channel([process(10)], { state: "error", at: at + 1 }) }, at + 1),
+    make([], { processes: channel([process(10)], { state: "unavailable" }) })]) {
+    assert.equal(nodes[0].memory, null);
+    assert.equal(nodes[0].cpu, null);
+    assert.equal(nodes[0].historyValid, false);
+    assert.equal(nodes[0].children[0].memory, null);
+    assert.equal(processRows(nodes)[0].process.memory, null);
+    history.update(nodes, at + 10001);
+    assert.deepEqual(history.get(nodes[0]), [10]);
+  }
+  const partial = make([], { processes: channel([process(10, 0, 99)], { state: "partial", at: at + 1 }) }, at + 1);
+  history.update(partial, at + 1);
+  assert.equal(partial[0].memory, 99);
+  assert.equal(partial[0].historyValid, false);
+  assert.deepEqual(history.get(partial[0]), [10]);
+  assert.deepEqual(buildSystemResources(), []);
+});
+
+test("system machine history survives normal PID churn while process identity resets on PID reuse", () => {
+  const make = (rows, time) => buildSystemResources({ snapshots: new Map([["", snapshot(rows, { processes: channel(rows, { at: time }) })]]), now: time });
+  const history = new MemoryHistory(), first = make([process(10)], at);
+  history.update(first, at);
+  const next = make([process(10, 0, 20, { start: "new-start" }), process(11)], at + 1);
+  history.update(next, at + 1);
+  assert.equal(next[0].identity, first[0].identity);
+  assert.notEqual(next[0].children[0].id, first[0].children[0].id);
+  assert.deepEqual(history.get(next[0]), [10, 30]);
+  assert.deepEqual(history.get(next[0].children[0]), [20]);
+});
+
+test("managed Ports restrict by machine, PID and start independently of listener scope metadata", () => {
+  const listener = { pid: 10, family: "ipv4", protocol: "tcp", address: "127.0.0.1", port: 8080 };
+  const snapshots = new Map([["", snapshot([process(10), process(11, 10), process(99)], {
+    listeners: channel([listener, listener, { ...listener, pid: 11 }, { ...listener, pid: 99 }], {
+      scope: "all", processes: [process(10), process(11), process(99)] })
+  })], ["ssh", snapshot([process(10)], { listeners: channel([listener], { scope: "managed", processes: [process(10)] }) })]]);
+  const managed = build([terminal("t1", 10, placed)], [], { snapshots });
+  assert.deepEqual(portRows(snapshots, { managed, now: at, sort: "pid" }).map(row => row.process.pid), [10, 11]);
+  assert.equal(portRows(snapshots, { now: at }).length, 4);
+  assert.deepEqual(portRows(snapshots, { managed: [], now: at }), []);
+  const reused = build([terminal("t1", 10, placed)], [process(10, 0, 10, { start: "reused" })]);
+  assert.deepEqual(portRows(snapshots, { managed: reused, now: at }), []);
+  const system = buildSystemResources({ snapshots, now: at });
+  assert.notEqual(system[0].children[0].process.start, reused[0].processes[0].start);
+  snapshots.get("").listeners.processes = [process(10, 0, 999, { start: "reused", name: "wrong-owner" })];
+  const old = portRows(snapshots, { managed, now: at, query: "8080" }).find(row => row.port.pid === 10);
+  assert.equal(old.process.name, "Unknown process");
+  assert.equal(portRows(snapshots, { managed, now: at, query: "wrong-owner" }).length, 0);
+  const current = buildSystemResources({ snapshots: new Map([["", snapshot([process(10, 0, 10, { start: "reused" })], { listeners: snapshots.get("").listeners })]]), now: at });
+  assert.deepEqual(current[0].children[0].ports, []);
+});
+
+test("collector isolates scope CPU baselines and listener caches and forget invalidates both", async () => {
+  const listener = { pid: 10, family: "ipv4", protocol: "tcp", address: "127.0.0.1", port: 8080, socket: null };
+  let response = native(1, "created", { listeners: { complete: true, scope: "managed", rows: [listener] } });
+  const calls = [];
+  const collector = createCollector(async (...args) => { calls.push(args); return { code: 0, stdout: response, stderr: "" }; }, () => "/helper");
+  const managed = await collector.sample(null, { roots: [10], ports: true });
+  assert.equal(managed.scope, "herdr");
+  response = native(2, "created", { monotonic: 101 });
+  const system = await collector.sample(null, { roots: [10], scope: "system" });
+  assert.equal(system.scope, "system");
+  assert.equal(system.processes.rows[0].cpu, null);
+  assert.deepEqual(system.listeners.rows, []);
+  assert.deepEqual(calls[1][1], ["--roots=10", "--scope=system"]);
+  const again = await collector.sample(null, { roots: [10] });
+  assert.equal(again.processes.rows[0].cpu, 100);
+  assert.equal(again.listeners.rows.length, 1);
+  collector.forget(null);
+  response = native(3, "created", { monotonic: 102 });
+  for (const scope of ["herdr", "system"]) {
+    const reset = await collector.sample(null, { roots: [10], scope });
+    assert.equal(reset.processes.rows[0].cpu, null);
+    assert.deepEqual(reset.listeners.rows, []);
+  }
+});
+
+test("clearing the collector cancels a queued scope change before another native call starts", async () => {
+  let finish, calls = 0;
+  const collector = createCollector(() => {
+    calls++;
+    return new Promise(resolve => { finish = () => resolve({ code: 0, stderr: "", stdout: native() }); });
+  }, () => "/helper");
+  const managed = collector.sample(null, { roots: [10] });
+  const queuedSystem = collector.sample(null, { scope: "system" });
+  collector.clear();
+  finish();
+  assert.equal(await managed, null);
+  assert.equal(await queuedSystem, null);
+  assert.equal(calls, 1);
 });

@@ -16,12 +16,12 @@ parser.add_argument("--roots", default=str(os.getpid()))
 parser.add_argument("--samples", type=int, default=30)
 parser.add_argument("--interval", type=float, default=1.0)
 parser.add_argument("--ports-every", type=int, default=0)
-parser.add_argument("--all-ports", action="store_true")
+parser.add_argument("--scope", choices=("herdr", "system"), default="herdr")
 args = parser.parse_args()
 if args.samples < 1 or args.interval <= 0 or args.ports_every < 0:
     parser.error("samples/interval must be positive; ports-every must be nonnegative")
 helper = Path(__file__).resolve().parents[1] / "mods/resource-monitor/bin/herdr-resource-sample"
-command = [str(helper), f"--roots={args.roots}"]
+command = [str(helper), f"--roots={args.roots}", f"--scope={args.scope}"]
 subprocess.run(command, check=True, capture_output=True, timeout=2, close_fds=False)
 cpu, wall, sizes = [], [], []
 parent_before = time.process_time()
@@ -30,7 +30,7 @@ last = None
 for index in range(args.samples):
     before = resource.getrusage(resource.RUSAGE_CHILDREN)
     tick = time.monotonic()
-    result = subprocess.run(command + (["--all-ports" if args.all_ports else "--ports"] if args.ports_every and index % args.ports_every == 0 else []),
+    result = subprocess.run(command + (["--ports"] if args.ports_every and index % args.ports_every == 0 else []),
                             check=True, capture_output=True, timeout=2, close_fds=False)
     after = resource.getrusage(resource.RUSAGE_CHILDREN)
     cpu.append((after.ru_utime + after.ru_stime - before.ru_utime - before.ru_stime) * 1000)
@@ -43,7 +43,7 @@ parent_cpu = time.process_time() - parent_before
 rss = resource.getrusage(resource.RUSAGE_CHILDREN).ru_maxrss
 print(json.dumps({
     "samples": args.samples, "durationSeconds": duration, "portsEvery": args.ports_every,
-    "listenerScope": "all" if args.all_ports else "managed",
+    "processScope": args.scope, "listenerScope": "all" if args.scope == "system" else "managed",
     "roots": len(set(filter(None, args.roots.split(",")))),
     "lastRows": len(last["rows"]),
     "lastMeasuredProcesses": sum(row["memory"] is not None for row in last["rows"]),

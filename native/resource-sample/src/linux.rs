@@ -25,25 +25,35 @@ fn stat(pid: u32) -> io::Result<Process> {
     })
 }
 
-pub fn topology(
-    _roots: &[u32],
-    _include_unmanaged: bool,
-) -> Result<(Vec<Process>, bool, bool), String> {
+pub fn topology(_roots: &[u32], system: bool) -> Result<(Vec<Process>, bool), String> {
     let mut rows = Vec::new();
     let mut complete = true;
     for entry in fs::read_dir("/proc").map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;
         if let Ok(pid) = entry.file_name().to_string_lossy().parse::<u32>() {
-            if pid == std::process::id() {
+            if pid == std::process::id() && !system {
                 continue;
             }
             match stat(pid) {
                 Ok(row) => rows.push(row),
-                Err(_) => complete = false,
+                Err(_) => {
+                    complete = false;
+                    if system {
+                        rows.push(Process {
+                            pid,
+                            ppid: 0,
+                            name: String::new(),
+                            start: None,
+                            seconds: None,
+                            memory: None,
+                            footprint: None,
+                        });
+                    }
+                }
             }
         }
     }
-    Ok((rows, complete, complete))
+    Ok((rows, complete))
 }
 extern "C" {
     fn sysconf(name: i32) -> i64;
@@ -130,6 +140,11 @@ pub fn listeners(_rows: &[Process], _selected: &HashSet<u32>) -> Result<Value, S
     let mut seen = HashSet::new();
     let mut complete = true;
     for row in _rows {
+        if row.start.is_none() || stat(row.pid).ok().and_then(|p| p.start) != row.start {
+            complete = false;
+            continue;
+        }
+        let first = result.len();
         let Ok(fds) = fs::read_dir(format!("/proc/{}/fd", row.pid)) else {
             complete = false;
             continue;
@@ -151,6 +166,10 @@ pub fn listeners(_rows: &[Process], _selected: &HashSet<u32>) -> Result<Value, S
                     result.push(json!({"pid":row.pid,"family":family,"address":address,"port":port,"protocol":"tcp","socket":format!("inode:{inode}")}));
                 }
             }
+        }
+        if stat(row.pid).ok().and_then(|p| p.start) != row.start {
+            result.truncate(first);
+            complete = false;
         }
     }
     Ok(json!({"rows":result,"complete":complete}))

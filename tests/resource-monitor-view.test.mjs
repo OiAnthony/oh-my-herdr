@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
 import { createCollector } from "../mods/resource-monitor/collect.js";
-import { buildResources, MemoryHistory } from "../mods/resource-monitor/model.js";
-import { buildResourceTree, processRows, resourceRows } from "../mods/resource-monitor/tree.js";
+import { buildResources, buildSystemResources, MemoryHistory } from "../mods/resource-monitor/model.js";
+import { buildResourceTree, processRows, portRows, resourceRows } from "../mods/resource-monitor/tree.js";
 import { bytes, cpu, footerCpu, footerCpuColor, endpoint, clean } from "../mods/resource-monitor/format.js";
 
 const source = readFileSync(new URL("../mods/resource-monitor/main.js", import.meta.url), "utf8")
@@ -13,10 +13,10 @@ const walk = node => typeof node === "string" ? [] : [node, ...node.items.flatMa
 const text = node => typeof node === "string" ? [node] : node.items.flatMap(text);
 const button = (ui, id) => walk(ui).find(node => node.attributes.id === id);
 function fixture({ delayed = false } = {}) {
-  const host = { active: true, notifications: 0, calls: [], jobs: [], timers: [],
+  const host = { active: true, delayed, notifications: 0, calls: [], jobs: [], timers: [],
     theme: { ansi2: "#4ade80", ansi3: "#facc15", ansi1: "#f87171", muted: "#9198a1" },
     terminals: [{ address: "t1", pid: 10, state: "live", labels: { "herdr.tab": "tab1" } }] };
-  const handle = () => ({ released: false, focus() {}, scroll_to_item() {}, release() { this.released = true; } });
+  const handle = () => ({ released: false, focus() {}, scroll_to_item(index, strategy) { host.scroll = { index, strategy }; }, release() { this.released = true; } });
   const element = kind => {
     const node = { kind, items: [], attributes: {} };
     const proxy = new Proxy(node, { get(target, key) {
@@ -44,7 +44,7 @@ function fixture({ delayed = false } = {}) {
   };
   const context = vm.createContext({
     Date,
-    View: class {}, Button: component("button"), Popover: component("popover"), Tab: component("tab"), Tabs: component("tabs"), Toggle: component("toggle"),
+    View: class {}, Button: component("button"), Popover: component("popover"), Radio: component("radio"), RadioGroup: component("radio-group"), Tab: component("tab"), Tabs: component("tabs"), Toggle: component("toggle"),
     PathBuilder: { stroke: () => ({ move_to() {}, line_to() {}, build() { return {}; } }) },
     window: { paint_path: () => element("path"), viewport_size: () => host.viewport ?? { width: 1200, height: 1000 } },
     Scrollbar: { vertical: () => element("scrollbar") },
@@ -55,12 +55,12 @@ function fixture({ delayed = false } = {}) {
       return node;
     },
     VirtualListScrollHandle: { new: handle },
-    createCollector, buildResources, MemoryHistory, buildResourceTree, processRows, resourceRows, bytes, cpu, footerCpu, footerCpuColor, endpoint, clean,
+    createCollector, buildResources, buildSystemResources, MemoryHistory, buildResourceTree, processRows, portRows, resourceRows, bytes, cpu, footerCpu, footerCpuColor, endpoint, clean,
     props: () => ({}), appHome: () => "/fixture-home",
     appWindow: () => ({ active: host.active, platform: "macos" }),
-    focused: () => ({ space: "s1" }), terminals: () => host.terminals,
+    focused: () => host.focus ?? { space: "s1" }, terminals: () => host.terminals,
     spaces: () => [{ id: "s1", active: true, tabs: [{ id: "tab1" }] }],
-    panes: () => [], agents: () => [], machines: () => [{ name: null, layout: "available" }],
+    panes: () => host.panes ?? [], agents: () => [], machines: () => [{ name: null, layout: "available" }],
     exec(_path, args) {
       host.calls.push(args);
       const n = host.calls.length;
@@ -68,10 +68,10 @@ function fixture({ delayed = false } = {}) {
         schema: 1, platform: "macos", monotonic: n, topologyComplete: host.topologyComplete ?? false,
         rows: [{ pid: 10, ppid: 1, name: "shell", start: "birth", seconds: n * (host.cpuScale ?? 1), memory: 200, footprint: host.memory ?? 100 },
           ...(host.extraRows ?? [])],
-        host: { total: 1000, available: null }, listeners: args.includes("--ports") || args.includes("--all-ports")
-          ? { rows: host.listeners ?? [], complete: true, scope: args.includes("--all-ports") ? "all" : "managed" } : null
+        host: { total: 1000, available: null }, listeners: args.includes("--ports")
+          ? { rows: host.listeners ?? [], complete: true, scope: args.includes("--scope=system") ? "all" : "managed" } : null
       }) });
-      return delayed ? new Promise(resolve => { host.resolve = () => resolve(reply()); }) : Promise.resolve(reply());
+      return host.delayed ? new Promise(resolve => { host.resolve = () => resolve(reply()); }) : Promise.resolve(reply());
     }
   });
   vm.runInContext(source, context);
@@ -208,13 +208,8 @@ test("Tree combines resource hierarchy, filters and memory trend without collect
   view.open = true;
   const ui = view.panel(cx);
   assert.equal(view.tab, "tree");
-  assert.deepEqual(walk(ui).filter(node => node.kind === "tab").map(node => node.attributes.id),
-    ["resource-tab-tree", "resource-tab-processes"]);
-  assert.ok(text(ui).includes("Tree"));
-  assert.equal(walk(ui).filter(node => node.kind === "input").length, 0);
   assert.ok(walk(ui).some(node => node.kind === "path"));
-  assert.equal(button(ui, "resource-show-ports").attributes.pressed, false);
-  assert.ok(host.calls.every(args => !args.includes("--ports") && !args.includes("--all-ports")));
+  assert.ok(host.calls.every(args => !args.includes("--ports") && args.includes("--scope=herdr")));
   view.query = "shell 10";
   view.flatten(true);
   assert.deepEqual(view.rows.filter(row => row.type === "process").map(row => row.process.pid), [10]);
@@ -252,7 +247,7 @@ test("Processes tab renders a flat sortable table and shares sampling without qu
   await tick();
   assert.equal(host.calls.length, calls + 1);
   assert.equal(host.timers.length, 1);
-  assert.ok(host.calls.every(args => !args.includes("--ports") && !args.includes("--all-ports")));
+  assert.ok(host.calls.every(args => !args.includes("--ports") && args.includes("--scope=herdr")));
   button(table, "resource-tab-tree").attributes.on_click({}, cx);
   await flush();
   assert.equal(view.sort, "memory");
@@ -285,23 +280,20 @@ test("Tree ports toggle gates sampling, filtering and cached port rows", async t
   view.flatten();
   view.portsAt.clear();
   await tick();
-  assert.equal(host.calls.at(-1).includes("--all-ports"), true);
-  assert.equal(view.snapshots.get("").listeners.scope, "all");
+  assert.equal(host.calls.at(-1).includes("--scope=herdr"), true);
+  assert.equal(view.snapshots.get("").listeners.scope, "managed");
   button(view.panel(cx), "resource-show-ports").attributes.on_change(false, cx);
   assert.equal(view.query, "shell 8080");
-  assert.equal(view.portSearch, false);
   assert.ok(view.rows.every(row => row.type !== "port"));
   assert.equal(walk(view.panel(cx)).filter(node => node.kind === "input").length, 0);
   await tick();
   assert.equal(host.calls.at(-1).includes("--ports"), false);
-  assert.equal(host.calls.at(-1).includes("--all-ports"), false);
   button(view.panel(cx), "resource-show-ports").attributes.on_change(true, cx);
   await flush();
   button(view.panel(cx), "resource-tab-processes").attributes.on_click({}, cx);
   view.portsAt.clear();
   await tick();
   assert.equal(host.calls.at(-1).includes("--ports"), false);
-  assert.equal(host.calls.at(-1).includes("--all-ports"), false);
   button(view.panel(cx), "resource-tab-tree").attributes.on_click({}, cx);
   await flush();
   assert.equal(host.calls.at(-1).includes("--ports"), true);
@@ -309,7 +301,6 @@ test("Tree ports toggle gates sampling, filtering and cached port rows", async t
   view.portsAt.clear();
   await tick();
   assert.equal(host.calls.at(-1).includes("--ports"), false);
-  assert.equal(host.calls.at(-1).includes("--all-ports"), false);
 });
 
 test("closing the owning view releases handles and ignores an already dispatched sample", async () => {
@@ -417,4 +408,206 @@ test("shortcuts and navigation never enter the query, while spaces and Unicode a
   assert.equal(view.query, "");
   press(view, cx, "/", { key_char: "/" });
   assert.equal(view.query, "/");
+});
+
+test("bulk tree actions and locate reveal the focused pane through collapsed ancestors and filters", async t => {
+  const { host, view, cx, flush } = fixture();
+  t.after(() => view.close());
+  host.panes = [{ pane: "p1", terminal: "t1", tab: "tab1", title: "Shell pane" },
+    { pane: "preview", mod: "git-graph", tab: "tab1", title: "Preview" }];
+  host.focus = { space: "s1", pane: "p1", terminal: "t1" };
+  await flush();
+  view.open = true;
+  button(view.panel(cx), "resource-expand-all").attributes.on_click({}, cx);
+  assert.ok(view.rows.some(row => row.type === "process" && row.process.pid === 10));
+  button(view.panel(cx), "resource-collapse-all").attributes.on_click({}, cx);
+  assert.deepEqual(view.rows.map(row => row.node.kind), ["space"]);
+  view.query = "not present";
+  view.flatten(true);
+  button(view.panel(cx), "resource-locate-pane").attributes.on_click({}, cx);
+  assert.equal(view.query, "");
+  assert.equal(view.rows.find(row => row.id === view.selected).node.pane, "p1");
+  assert.equal(host.scroll.index, view.rows.findIndex(row => row.id === view.selected));
+  assert.equal(host.scroll.strategy, "center");
+  button(view.panel(cx), "resource-tab-ports").attributes.on_click({}, cx);
+  host.focus = { space: "s1", pane: "preview", terminal: null };
+  button(view.panel(cx), "resource-locate-pane").attributes.on_click({}, cx);
+  assert.equal(view.tab, "tree");
+  assert.equal(view.rows.find(row => row.id === view.selected).node.pane, "preview");
+  await flush();
+});
+
+test("Ports follows scope, filters and sorts owners, then stops scanning when hidden", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
+  const { host, view, cx, flush, tick } = fixture();
+  t.after(() => view.close());
+  host.extraRows = [{ pid: 21, ppid: 1, name: "outside-server", start: "outside-birth", seconds: 1, memory: 20, footprint: 10 }];
+  host.listeners = [
+    { pid: 21, port: 8080, family: "ipv6", address: "::1", protocol: "tcp", socket: "outside" },
+    { pid: 10, port: 3000, family: "ipv4", address: "127.0.0.1", protocol: "tcp", socket: "managed" }
+  ];
+  await flush();
+  view.open = true;
+  button(view.panel(cx), "resource-tab-ports").attributes.on_click({}, cx);
+  await flush();
+  assert.ok(host.calls.at(-1).includes("--scope=herdr"));
+  assert.deepEqual(view.rows.map(row => row.port.port), [3000]);
+  button(view.panel(cx), "resource-scope-system").attributes.on_change(true, cx);
+  await flush();
+  assert.ok(host.calls.at(-1).includes("--scope=system"));
+  assert.deepEqual(view.rows.map(row => row.port.port), [3000, 8080]);
+  view.query = "outside 8080";
+  view.flatten();
+  assert.deepEqual(view.rows.map(row => row.process.pid), [21]);
+  host.extraRows[0] = { ...host.extraRows[0], start: "reused-birth", name: "replacement" };
+  await tick();
+  assert.equal(host.calls.at(-1).includes("--ports"), false);
+  assert.equal(view.rows[0].process.name, "outside-server");
+  view.query = "";
+  view.flatten();
+  button(view.panel(cx), "resource-sort-name").attributes.on_click({}, cx);
+  assert.deepEqual(view.rows.map(row => row.process.name), ["outside-server", "shell"]);
+  t.mock.timers.tick(5000);
+  await tick();
+  assert.ok(host.calls.at(-1).includes("--ports"));
+  assert.equal(view.rows[0].process.name, "replacement");
+  button(view.panel(cx), "resource-tab-processes").attributes.on_click({}, cx);
+  await tick();
+  assert.equal(host.calls.at(-1).includes("--ports"), false);
+  button(view.panel(cx), "resource-tab-ports").attributes.on_click({}, cx);
+  await flush();
+  view.setOpen(false, cx);
+  t.mock.timers.tick(5000);
+  await tick();
+  assert.equal(host.calls.at(-1).includes("--ports"), false);
+  assert.ok(host.calls.at(-1).includes("--scope=herdr"));
+});
+
+test("System Ports works without managed terminals and preserves loading until the scan finishes", async t => {
+  const { host, view, cx, flush, tick } = fixture();
+  t.after(() => view.close());
+  await flush();
+  host.terminals = [];
+  view.open = true;
+  view.setScope("system", cx);
+  button(view.panel(cx), "resource-tab-ports").attributes.on_click({}, cx);
+  assert.equal(view.systemSnapshots.get("")?.listeners.at ?? 0, 0);
+  await flush();
+  await tick();
+  assert.ok(host.calls.at(-1).includes("--roots="));
+  assert.ok(host.calls.at(-1).includes("--scope=system"));
+  assert.equal(view.systemSnapshots.get("").listeners.state, "ready");
+  assert.deepEqual(view.rows, []);
+});
+
+test("listener rows preserve machines, dual stack and unknown identities while deduplicating FD repeats", () => {
+  const port = { pid: 21, start: "birth", port: 8080, family: "ipv4", address: "127.0.0.1", protocol: "tcp", socket: "a" };
+  const listeners = { at: 1000, state: "ready", processes: [{ pid: 21, start: "reused", name: "wrong-owner" }],
+    rows: [port, port, { ...port, family: "ipv6", address: "::1", socket: "b" }] };
+  const rows = portRows(new Map([["", { listeners }], ["remote", { listeners }]]), { now: 2000 });
+  assert.equal(rows.length, 4);
+  assert.equal(new Set(rows.map(row => row.id)).size, 4);
+  assert.ok(rows.every(row => row.process.name === "Unknown process"));
+  assert.equal(portRows(new Map([["remote", { listeners }]]), { query: "remote 8080 ::1", now: 2000 }).length, 1);
+  assert.ok(portRows(new Map([["", { listeners }]]), { now: 17000 }).every(row => row.node.stale));
+});
+
+test("scope changes preserve filtering and sorting across tabs while footer remains managed", async t => {
+  const { host, view, cx, flush, tick } = fixture();
+  t.after(() => view.close());
+  host.topologyComplete = true;
+  host.extraRows = [{ pid: 21, ppid: 1, name: "outside-server", start: "outside", seconds: 2, memory: 800, footprint: 700 }];
+  await flush();
+  view.setOpen(true, cx);
+  await flush();
+  button(view.panel(cx), "resource-tab-processes").attributes.on_click({}, cx);
+  view.query = "outside";
+  view.sort = "pid";
+  view.flatten();
+  assert.deepEqual(view.rows, []);
+  button(view.panel(cx), "resource-scope-system").attributes.on_change(true, cx);
+  await flush();
+  assert.equal(view.query, "outside");
+  assert.equal(view.sort, "pid");
+  assert.equal(host.scroll.index, 0);
+  assert.deepEqual(view.rows.map(row => row.process.pid), [21]);
+  assert.equal(view.summary("system").memory, 800);
+  assert.equal(view.summary().memory, 100);
+  assert.equal(view.summary("system").cpu, null);
+  button(view.panel(cx), "resource-tab-tree").attributes.on_click({}, cx);
+  await flush();
+  assert.equal(view.scope, "system");
+  assert.ok(view.rows.some(row => row.node.kind === "system-process" && row.process.pid === 21));
+  button(view.panel(cx), "resource-tab-ports").attributes.on_click({}, cx);
+  await flush();
+  assert.equal(view.scope, "system");
+  view.setOpen(false, cx);
+  await flush();
+  await tick();
+  assert.equal(view.scope, "herdr");
+  assert.ok(host.calls.at(-1).includes("--scope=herdr"));
+  assert.equal(view.systemSnapshots.size, 0);
+  view.setOpen(true, cx);
+  await flush();
+  assert.equal(view.scope, "herdr");
+});
+
+test("switching scope and dismissing reject late system samples without blocking managed sampling", async t => {
+  const { host, view, cx, flush, tick } = fixture();
+  t.after(() => view.close());
+  await flush();
+  view.open = true;
+  host.delayed = true;
+  view.setScope("system", cx);
+  await Promise.resolve();
+  const resolve = host.resolve;
+  view.setScope("herdr", cx);
+  host.delayed = false;
+  resolve();
+  await flush();
+  assert.equal(view.systemSnapshots.size, 0);
+  assert.equal(view.inflight.size, 0);
+  await tick();
+  assert.equal(view.snapshots.get("").scope, "herdr");
+  host.delayed = true;
+  view.setScope("system", cx);
+  await Promise.resolve();
+  const closeResolve = host.resolve;
+  button(view.panel(cx), "resource-close").attributes.on_click({}, cx);
+  host.delayed = false;
+  closeResolve();
+  await flush();
+  assert.equal(view.open, false);
+  assert.equal(view.scope, "herdr");
+  assert.equal(view.systemSnapshots.size, 0);
+  await tick();
+  assert.equal(view.snapshots.get("").scope, "herdr");
+  assert.equal(view.snapshots.get("").processes.rows[0].cpu, null);
+});
+
+test("locating a pane leaves System and reveals the managed pane while search never expands scope", async t => {
+  const { host, view, cx, flush, tick } = fixture();
+  t.after(() => view.close());
+  host.panes = [{ pane: "p1", terminal: "t1", tab: "tab1", title: "Shell pane" }];
+  host.focus = { space: "s1", pane: "p1", terminal: "t1" };
+  await flush();
+  view.open = true;
+  button(view.panel(cx), "resource-show-ports").attributes.on_change(true, cx);
+  await flush();
+  press(view, cx, "x");
+  await tick();
+  assert.equal(view.scope, "herdr");
+  assert.ok(host.calls.every(args => args.includes("--scope=herdr")));
+  view.setScope("system", cx);
+  await flush();
+  button(view.panel(cx), "resource-tab-processes").attributes.on_click({}, cx);
+  view.query = "not present";
+  view.flatten();
+  button(view.panel(cx), "resource-locate-pane").attributes.on_click({}, cx);
+  await flush();
+  assert.equal(view.scope, "herdr");
+  assert.equal(view.tab, "tree");
+  assert.equal(view.query, "");
+  assert.equal(view.rows.find(row => row.id === view.selected).node.pane, "p1");
+  assert.equal(host.scroll.strategy, "center");
 });

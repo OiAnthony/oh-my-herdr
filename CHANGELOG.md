@@ -2,13 +2,17 @@
 
 ## Unreleased
 
+- 修复 Resource Manager 的 Scope 选项文字偏上：为原生 Radio 显式设置 flex 和双轴居中，保持 24 px 高度及现有交互；隔离原生窗口截图确认 Herdr、System 文字垂直居中。
+- Resource Manager 新增 `Herdr / System` 作用域选择器，统一控制 Tree、Processes 和 Ports。每次打开默认 Herdr，切换范围保留关键词与排序，搜索不再隐式扩大范围；定位 pane 返回 Herdr Tree。System 增加全机 CPU／内存及 OS 进程树，未知指标不补零，进程自身指标与机器去重合计分开。footer 始终显示受管资源；关闭弹层停止全机采集，范围切换隔离 CPU 基线、监听缓存、趋势及迟到结果。原生 CLI 改为 `--scope=herdr|system [--ports]`，移除旧 `--all-ports`，helper 与 Mod 需配套部署。
+- 作用域功能在 macOS arm64 验证了 58 项相关 Node 测试、2 项 Rust 测试、Linux／Windows 交叉编译，以及 Herdr Desktop 0.1.15 初始加载和隔离窗口的真实全机 Tree 渲染。辅助功能读取被系统拒绝，未宣称物理鼠标／键盘切换验收。全机 helper 在约 939 个进程、1 Hz、每 5 秒扫描端口的 10 秒短测中占 1.55% 单核、峰值 RSS 3.98 MiB，超过既有 1% CPU 上限；完整应用性能尚未验收。本次未部署到日常应用、切换日常布局或重启现有服务。
+- Resource Manager 增加展开全部、收起全部及定位当前 pane 图标；定位会清空过滤、展开祖先并居中选中目标。新增 Ports 页，按当前作用域列出 TCP 监听地址、进程和 PID，支持键入筛选及列排序；共用现有采集器，每 5 秒扫描，隐藏后停止。移除底部只读与键盘操作说明，错误和覆盖状态移到上方，Refresh / Close 改为图标。
 - 将九个 Node 测试文件迁入 `tests/`，修正模块、快捷键预设和原生 helper 的相对路径；测试命令改为 `node --test tests/*.test.mjs`。新增开发指南，资源监控方案迁至 `docs/design/resource-monitor.md`，历史验收记录归入本 changelog。套件入口、Mod 和布局路径、安装行为不变。
 - 新增 `install.sh`，一条命令完成资源采集程序构建、布局与八个 Mods 部署、快捷键合并和 `herdr-app check`；支持 `--switch` 和 `--dry-run`。README 改为以安装和使用为主，并保留 Gallery `RECIPE.md`、真实窗口预览和统一的布局源文件 `layouts/Professional.json`、`layouts/Professional.svg`。
 - 新增根 Apache-2.0 许可、NOTICE 与第三方来源清单，部署 Mod 自带必要许可。核实 Herdr v0.1.14 与 Open VS Code 对应源码的 Apache-2.0 / MIT 条款，保留其他资源及 native 依赖许可；移除未核清分发权的四枚应用 PNG，以中性图标替代，应用选项和启动行为不变。
 
 - 修复 Resource Manager 按空格时关闭弹层的问题：空格和 Enter 使用面板内的 action 绑定，避免宿主 Popover 提前将它们作为确认操作；空格继续输入关键词分隔符，Enter 保留行展开行为。
 
-- Resource Manager 两页移除固定搜索框，改为直接键入过滤所有表格字段；支持空格分词、跨字段组合匹配与 Backspace 编辑。Tree 保留命中项的所属路径和 OS 父进程链；第一次 Esc 清空搜索，第二次 Esc 隐藏弹层。Ports 开启时，非空关键词搜索补充全机监听；关闭 Ports 保留关键词并排除监听字段。
+- Resource Manager 移除固定搜索框，改为直接键入过滤所有表格字段；支持空格分词、跨字段组合匹配与 Backspace 编辑。Tree 保留命中项的所属路径和 OS 父进程链；第一次 Esc 清空搜索，第二次 Esc 隐藏弹层。关闭 Ports 保留关键词并排除监听字段。
 
 - Resource Manager 弹层在定位前按窗口尺寸计算像素宽高，保留 416 × 640 px 上限及窄窗口约束，消除百分比最大高度造成的 footer 上方空隙。
 
@@ -18,7 +22,7 @@
 - Agents 列表隐藏 OMP 自动标题中品牌后方的重复状态符号，包含等待、需关注、静态分隔符及四种 spinner；状态保留在 Herdr 行尾。任务 emoji、正文、无品牌标题及手动命名的 tab 保持原样。
 - Resources 改为 footer 实时 CPU、内存与原生弹层，共享一套 1 Hz 采样；footer 不显示 `≈` 和终端数。沿用 Orca 的 416 px 弹层与紧凑表格；原 Resources / PTYs 合并为 Tree 页签，资源树按 Space → Pane 展示，省略 Tab 层，统一保留排序、子进程树、内存趋势和组合搜索。Ports 开关默认关闭，关闭后清空端口条件并隐藏缓存端口行。未知及覆盖不完整单独标注；应用失活暂停，显示值不变时减少 footer 与弹层重绘。
 - Resource Manager 新增 Processes 页，将受管终端及子进程铺平成 Name / PID / CPU / Memory 明细表，支持名称或机器名、精确 PID 筛选与列排序；共享现有快照，不新增采样或端口扫描。
-- 新增 Rust helper：macOS 按受管根查询后代并读取 footprint/RSS 与累计 CPU；Linux 使用 procfs，Windows 使用原生进程和 TCP API。监听默认只查受管进程，Tree 页可见且 Ports 开启后每 5 秒采集；输入端口筛选时才补充全机监听。PID 复用、超时和迟到结果不污染当前数据，不回退重型系统命令。
+- 新增 Rust helper：macOS Herdr 范围按受管根查询后代，System 枚举全机；Linux 使用 procfs，Windows 使用原生进程和 TCP API。按范围读取内存与累计 CPU，监听每 5 秒按需采集。PID 复用、超时和迟到结果不污染当前数据，不回退重型系统命令。
 - 安装器支持本机 helper 的构建前检查、可执行权限和失败回滚；目标 Desktop 版本更新为 0.1.15。原生源码与依赖锁入库，二进制按目标平台构建，许可随 Mod 安装。本机采集及 Linux/Windows 交叉编译检查通过；完整界面与全链路性能仍待验收。
 - 新增 `⌘⇧E` 聚焦 Files、`⌘⇧G` 切换 Changes；Files 已聚焦时再次按下隐藏，可见但未聚焦时只聚焦。Changes 按可见状态切换，隐藏后返回当前 pane。新增 `professional-panels` 布局适配器，保留内置 0.1.14 面板源码和原生子控件，内置模块不变；纳入安装归属和快捷键恢复。
 - Professional 右上角改为 Files、Changes、`+`、Open With 的顺序，将两个启动入口相邻放置；保留独立菜单、默认项和快捷键行为，并同步布局预览图。

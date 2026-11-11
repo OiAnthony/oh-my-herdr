@@ -46,7 +46,7 @@ oh-my-herdr/install.sh --switch
 | `⌘T` | 新建终端 |
 | `⌘⇧P` | 命令面板 |
 
-点底部 CPU 或内存读数打开 Resource Manager。直接输入过滤，空格分词，第一次 Esc 清空，第二次关闭。Tree 页可以打开 Ports 查看监听端口。
+点底部 CPU 或内存读数打开 Resource Manager。上方 `Herdr / System` 同时控制 Tree、Processes 和 Ports：Herdr 只看受管终端及 OS 后代，System 查看各机器的全机进程和 TCP 监听。每次打开默认 Herdr；切换范围保留过滤词与排序，切换页签保留范围。Tree 顶部图标可展开全部、收起全部、定位当前 pane；定位会返回 Herdr Tree、清空过滤并滚动到目标行。直接输入过滤，空格分词，第一次 Esc 清空，第二次关闭。Tree 的 Ports 开关仅控制监听行显示，搜索不扩大范围。底部读数始终是 Herdr 受管资源；System 摘要是可读进程合计，不是系统已用内存。权限不足显示部分覆盖，关闭弹层后停止全机采集。
 
 `⌘W` 会结束 pane 里的终端。`⌘⇧W` 原有的关闭 pane 绑定已被移除。
 

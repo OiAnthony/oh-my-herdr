@@ -1,7 +1,7 @@
 import { binding } from "./model.js";
 import { bytes, cpu, endpoint, clean } from "./format.js";
 
-const leaf = node => node.kind === "terminal" || node.kind === "process-owner";
+const leaf = node => node.kind === "terminal" || node.kind === "system-process";
 const terms = query => query.trim().toLowerCase().split(/\s+/).filter(Boolean);
 const matches = (fields, words) => {
   const text = fields.map(clean).join(" ").toLowerCase();
@@ -12,54 +12,7 @@ const processFields = process => [process.name, process.pid, process.ppid, proce
   cpu(process.cpu), bytes(process.memory), `RSS ${bytes(process.resident)}`];
 const portFields = port => [endpoint(port), "TCP LISTEN", port.binding];
 
-// Port searches also include collected listeners outside Herdr's managed OS trees.
-function otherListeners(root, snapshot) {
-  const managed = new Set(root.processes.map(process => process.pid));
-  const visit = node => {
-    if (node.kind === "terminal") node.processes.forEach(process => managed.add(process.pid));
-    node.children.forEach(visit);
-  };
-  visit(root);
-  const table = new Map((snapshot?.listeners?.processes ?? snapshot?.processes?.rows ?? []).map(process => [process.pid, process]));
-  const owners = new Map();
-  for (const listener of snapshot?.listeners?.rows ?? []) {
-    if (managed.has(listener.pid)) continue;
-    const candidate = table.get(listener.pid);
-    const process = listener.start && candidate?.start === listener.start ? candidate : null;
-    let node = owners.get(listener.pid);
-    if (!node) {
-      const id = JSON.stringify(["port-process", root.machine, listener.pid, process?.start ?? null]);
-      const chain = [], visited = new Set();
-      let current = process;
-      while (current && !visited.has(current.pid)) {
-        visited.add(current.pid);
-        chain.unshift(current);
-        current = table.get(current.ppid);
-      }
-      if (!chain.length) chain.push({ pid: listener.pid, ppid: null, name: "Unknown process" });
-      node = { id, kind: "process-owner", name: process?.name || "Unknown process", machine: root.machine,
-        pid: listener.pid, children: [], metric: root.metric, at: snapshot?.listeners?.at,
-        cpu: process?.cpu ?? null, memory: process?.memory ?? null, footprint: null, footprintAt: null,
-        unknown: process ? 0 : 1, status: process ? snapshot.processes.state : "partial",
-        processState: process ? snapshot.processes.state : "partial",
-        stale: root.stale || !["ready", "partial"].includes(snapshot?.listeners?.state),
-        identity: id, directChildren: null, descendants: null,
-        processes: chain.map((entry, depth) => ({ ...entry, depth })),
-        ports: [], portsAt: snapshot?.listeners?.at };
-      owners.set(listener.pid, node);
-    }
-    const id = JSON.stringify([listener.family, listener.protocol, listener.address, listener.port, listener.socket ?? listener.pid]);
-    if (!node.ports.some(existing => existing.id === id)) {
-      node.ports.push({ ...listener, id, pids: [listener.pid], binding: binding(listener.address) });
-    }
-  }
-  if (!owners.size) return null;
-  return { id: JSON.stringify(["other-listeners", root.machine]), kind: "machine",
-    name: `${root.name} / Other processes`, machine: root.machine, metric: root.metric,
-    children: [...owners.values()], processes: [], ports: [], cpu: null, memory: null, unknown: 0 };
-}
-
-export function buildResourceTree(nodes, { query = "", showPorts = false, snapshots = new Map() } = {}) {
+export function buildResourceTree(nodes, { query = "", showPorts = false } = {}) {
   const words = terms(query);
   function project(source, path = [], pane = null) {
     if (source.kind === "pane" && source.children.length === 1 && source.children[0].kind === "terminal") {
@@ -69,7 +22,7 @@ export function buildResourceTree(nodes, { query = "", showPorts = false, snapsh
     const context = [...path, ...labels(node)];
     const children = node.children.flatMap(child => child.kind === "tab" ? child.children : [child])
       .map(child => project(child, context)).filter(Boolean);
-    if (!words.length) return { ...node, children };
+    if (!words.length) return { ...node, children, visiblePorts: showPorts ? node.ports : [] };
     const fresh = !node.stale && ["ready", "partial"].includes(node.processState);
     const own = matches([...context, cpu(fresh ? node.cpu : null), bytes(fresh ? node.memory : null),
       node.metric, node.message, node.stale ? "stale" : ""], words);
@@ -101,14 +54,7 @@ export function buildResourceTree(nodes, { query = "", showPorts = false, snapsh
       visibleProcesses: node.processes.filter(process => visible.has(process.pid)),
       visiblePorts: node.ports.filter(port => visiblePorts.has(port)) };
   }
-  const roots = nodes.flatMap(root => {
-    const children = [...root.children];
-    if (showPorts && words.length) {
-      const other = otherListeners(root, snapshots.get(root.machine ?? ""));
-      if (other) children.push(other);
-    }
-    return children;
-  });
+  const roots = nodes.flatMap(root => root.scope === "system" ? [root] : root.children);
   return roots.map(node => project(node)).filter(Boolean);
 }
 
@@ -117,10 +63,16 @@ export function resourceRows(tree, { expanded = new Set(), sort = "memory", curr
     || (sort === "name" ? a.name.localeCompare(b.name) : (b[sort] ?? -1) - (a[sort] ?? -1) || a.name.localeCompare(b.name));
   const rows = [];
   function walk(node, depth) {
-    rows.push({ id: node.id, type: "node", node, depth });
+    rows.push({ id: node.id, type: "node", node, depth, ...(node.kind === "system-process" ? { process: node.process } : {}) });
     if (!expanded.has(node.id)) return;
     for (const child of [...node.children].sort(compare)) walk(child, depth + 1);
     if (!leaf(node) || node.showDetails === false) return;
+    if (node.kind === "system-process") {
+      for (const port of node.visiblePorts ?? []) {
+        rows.push({ id: `${node.id}:port:${port.id}`, type: "port", node, process: node.process, port, depth: depth + 1 });
+      }
+      return;
+    }
     if (node.kind === "terminal") rows.push({ id: `${node.id}:detail`, type: "detail", node, depth: depth + 1 });
     for (const process of node.visibleProcesses ?? node.processes) {
       rows.push({ id: `${node.id}:pid:${process.pid}`, type: "process", node, process, depth: depth + 1 + (process.depth ?? 0) });
@@ -149,4 +101,32 @@ export function processRows(nodes, { query = "", sort = "memory" } = {}) {
     (sort === "name" ? (a.process.name ?? "").localeCompare(b.process.name ?? "")
       : sort === "pid" ? a.process.pid - b.process.pid : (b.process[sort] ?? -1) - (a.process[sort] ?? -1))
     || (a.process.name ?? "").localeCompare(b.process.name ?? "") || a.id.localeCompare(b.id));
+}
+
+// Listener metadata belongs to the slower scan, never to a newer PID incarnation.
+export function portRows(snapshots, { query = "", sort = "port", now = Date.now(), managed = null } = {}) {
+  const words = terms(query), rows = [], seen = new Set();
+  const allowed = managed === null ? null : new Set(managed.flatMap(node =>
+    node.processes.filter(process => process.start).map(process => JSON.stringify([node.machine ?? "", process.pid, process.start]))));
+  for (const [machine, snapshot] of snapshots) {
+    const listeners = snapshot.listeners;
+    const table = new Map((listeners?.processes ?? []).map(process => [process.pid, process]));
+    const node = { machine: machine || null, at: listeners?.at, name: machine || "This computer",
+      stale: !["ready", "partial"].includes(listeners?.state) || now - listeners.at > 15000,
+      message: listeners?.message };
+    for (const port of listeners?.rows ?? []) {
+      if (allowed && (!port.start || !allowed.has(JSON.stringify([machine || "", port.pid, port.start])))) continue;
+      const candidate = table.get(port.pid);
+      const process = port.start && candidate?.start === port.start ? candidate
+        : { pid: port.pid, name: "Unknown process", start: null };
+      const id = JSON.stringify(["listener", machine, port.pid, port.start, port.family, port.address, port.port, port.socket]);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      if (words.length && !matches([node.name, process.name, process.pid, endpoint(port), "TCP LISTEN",
+        binding(port.address), node.stale ? "stale" : ""], words)) continue;
+      rows.push({ id, type: "listener", node, process, port, depth: 0 });
+    }
+  }
+  return rows.sort((a, b) => (sort === "name" ? a.process.name.localeCompare(b.process.name)
+    : sort === "pid" ? a.process.pid - b.process.pid : a.port.port - b.port.port) || a.id.localeCompare(b.id));
 }

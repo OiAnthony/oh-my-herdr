@@ -57,13 +57,16 @@ fn main() {
 fn sample() -> Result<(), String> {
     let mut roots = Vec::new();
     let mut ports = false;
-    let mut all_ports = false;
+    let mut system = false;
     for arg in std::env::args().skip(1) {
         if arg == "--ports" {
             ports = true;
-        } else if arg == "--all-ports" {
-            ports = true;
-            all_ports = true;
+        } else if let Some(scope) = arg.strip_prefix("--scope=") {
+            system = match scope {
+                "herdr" => false,
+                "system" => true,
+                _ => return Err("Invalid scope: expected herdr or system".into()),
+            };
         } else if let Some(value) = arg.strip_prefix("--roots=") {
             for pid in value.split(',').filter(|s| !s.is_empty()) {
                 roots.push(
@@ -75,36 +78,37 @@ fn sample() -> Result<(), String> {
             }
         } else {
             return Err(
-                "Usage: herdr-resource-sample --roots=PID,PID [--ports|--all-ports]".into(),
+                "Usage: herdr-resource-sample --roots=PID,PID [--scope=herdr|system] [--ports]"
+                    .into(),
             );
         }
     }
-    let (mut rows, topology_complete, listener_topology_complete) =
-        platform::topology(&roots, all_ports)?;
-    let selected = descendants(&rows, &roots);
+    let (mut rows, topology_complete) = platform::topology(&roots, system)?;
+    let selected = if system {
+        rows.iter().map(|row| row.pid).collect()
+    } else {
+        descendants(&rows, &roots)
+    };
     let monotonic = platform::monotonic();
-    // Metadata for other processes is needed only for the optional port search.
-    for row in rows.iter_mut().filter(|p| selected.contains(&p.pid)) {
+    rows.retain(|p| selected.contains(&p.pid));
+    for row in &mut rows {
         platform::metrics(row);
     }
-    rows.retain(|p| selected.contains(&p.pid) || all_ports);
     // Listener failure must not discard independently valid CPU/memory data.
     let (listeners, listener_error) = if ports {
         match platform::listeners(&rows, &selected) {
             Ok(mut value) => {
-                if !listener_topology_complete {
+                if !topology_complete {
                     value["complete"] = json!(false);
                 }
-                if !all_ports {
-                    if let Some(rows) = value["rows"].as_array_mut() {
-                        rows.retain(|row| {
-                            row["pid"]
-                                .as_u64()
-                                .is_some_and(|pid| selected.contains(&(pid as u32)))
-                        });
-                    }
+                if let Some(rows) = value["rows"].as_array_mut() {
+                    rows.retain(|row| {
+                        row["pid"]
+                            .as_u64()
+                            .is_some_and(|pid| selected.contains(&(pid as u32)))
+                    });
                 }
-                value["scope"] = json!(if all_ports { "all" } else { "managed" });
+                value["scope"] = json!(if system { "all" } else { "managed" });
                 (Some(value), false)
             }
             Err(_) => (None, true),
@@ -143,5 +147,28 @@ mod tests {
         assert_eq!(descendants(&rows, &[10, 11]), HashSet::from([10, 11, 12]));
         assert_eq!(descendants(&rows, &[20]), HashSet::from([20, 21]));
         assert!(descendants(&rows, &[]).is_empty());
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn mismatched_identity_keeps_metrics_unknown() {
+    let mut row = Process {
+        pid: std::process::id(),
+        ppid: 0,
+        name: String::new(),
+        start: Some("not-the-current-process-start".into()),
+        seconds: None,
+        memory: None,
+        footprint: None,
+    };
+    platform::metrics(&mut row);
+    assert_eq!(row.start.as_deref(), Some("not-the-current-process-start"));
+    let value = row.json();
+    for field in ["seconds", "memory", "footprint"] {
+        assert!(
+            value[field].is_null(),
+            "{field} must remain unknown, not zero"
+        );
     }
 }

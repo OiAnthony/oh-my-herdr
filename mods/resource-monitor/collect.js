@@ -58,38 +58,42 @@ export function parseNative(text, previous = null, at = Date.now(), maxAge = 300
 
 export function createCollector(exec, localHelper) {
   const states = new Map(), pending = new Map();
-  return {
-    sample(machine = null, { platform = null, roots = [], ports = false, allPorts = false, maxAge = 3000 } = {}) {
-      const key = machine ?? "";
-      if (pending.has(key)) return pending.get(key);
-      let state = states.get(key);
-      if (!state) { state = {}; states.set(key, state); }
+  const collector = {
+    sample(machine = null, { platform = null, roots = [], scope = "herdr", ports = false, maxAge = 3000 } = {}) {
+      const key = machine ?? "", stateKey = JSON.stringify([key, scope]);
+      let state = states.get(stateKey);
+      if (!state) { state = { machine: key }; states.set(stateKey, state); }
+      const flight = pending.get(key);
+      if (flight) return flight.scope === scope ? flight.job
+        : flight.job.then(() => states.get(stateKey) === state
+          ? collector.sample(machine, { platform, roots, scope, ports, maxAge }) : null);
       const run = async () => {
-        const args = [`--roots=${[...new Set(roots.filter(pid => Number.isSafeInteger(pid) && pid > 0))].sort((a, b) => a - b).join(",")}`];
-        if (ports) args.push(allPorts ? "--all-ports" : "--ports");
+        const args = [`--roots=${[...new Set(roots.filter(pid => Number.isSafeInteger(pid) && pid > 0))].sort((a, b) => a - b).join(",")}`, `--scope=${scope}`];
+        if (ports) args.push("--ports");
         try {
           const result = await exec(machine ? "herdr-resource-sample" : localHelper(platform), args, { on: machine, timeout: 2000 });
           if (result.code !== 0 || result.stderr?.trim() || result.stdout.length >= LIMIT / 4) throw new Error("Native helper failed");
           const snapshot = parseNative(result.stdout, state.cpu, Date.now(), maxAge);
-          if (states.get(key) !== state) return null;
+          if (states.get(stateKey) !== state) return null;
           state.cpu = { at: snapshot.at, monotonic: snapshot.monotonic, rows: snapshot.processes.rows };
           if (ports) state.listeners = snapshot.listeners;
           else if (state.listeners) snapshot.listeners = state.listeners;
-          return { ...snapshot, machine };
+          return { ...snapshot, machine, scope };
         } catch {
-          if (states.get(key) !== state) return null;
+          if (states.get(stateKey) !== state) return null;
           state.cpu = null;
           const at = Date.now(), message = "Native resource helper unavailable or failed; build/install it for this machine";
-          return { machine, platform, at,
+          return { machine, scope, platform, at,
             processes: channel("error", at, [], message), footprints: channel("unavailable", at, [], message),
             listeners: channel("unavailable", at, [], message), host: { state: "unavailable", at, total: null, available: null, message } };
         }
       };
-      const job = run().finally(() => { if (pending.get(key) === job) pending.delete(key); });
-      pending.set(key, job);
+      const job = run().finally(() => { if (pending.get(key)?.job === job) pending.delete(key); });
+      pending.set(key, { scope, job });
       return job;
     },
-    forget(machine) { states.delete(machine ?? ""); },
+    forget(machine) { for (const [key, state] of states) if (state.machine === (machine ?? "")) states.delete(key); },
     clear() { states.clear(); }
   };
+  return collector;
 }

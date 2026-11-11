@@ -4,13 +4,17 @@
 
 ## 功能与边界
 
-Professional footer 直接显示 CPU 和内存，不显示 `≈` 或终端数。点击打开同一 View 的 Resource Manager。界面沿用 Orca 的图标、数值格式、416 px 宽度和 640 px 高度上限。原 Resources / PTYs 合并为 Tree，统一提供资源树、内存趋势和键入过滤；默认关闭的 Ports 开关控制端口显示及搜索范围。Processes 提供 Name / PID / CPU / Memory 平表。使用原生 Popover、Tab、虚拟列表与主题色。关闭 Ports 隐藏已缓存端口行，保留关键词并仅按其他字段匹配。
+Professional footer 直接显示 Herdr 受管 CPU 和内存，不随弹层作用域变化。点击打开同一 View 的 Resource Manager。使用原生 Popover、RadioGroup、Tab、虚拟列表与主题色，宽度上限 416 px，高度上限 640 px。标题下的 `Herdr / System` 两段选择器统一控制 Tree、Processes、Ports。每次打开默认 Herdr，不持久化范围；打开期间切换页签保留范围。切换范围保留关键词与排序，重置滚动位置。Tree 的 Ports 默认关闭，仅控制监听行显示。
 
-两页均无固定搜索框。直接键入字符进入搜索，空格分隔关键词，忽略大小写且全部命中；支持跨字段匹配名称、机器、PID/PPID、显示格式的 CPU 和内存，Tree 还支持所属路径与已启用的监听字段。Backspace 删除字符，第一次 Esc 清空搜索，第二次 Esc 关闭弹层；Esc 使用局部 action 绑定，优先于 Popover 的默认关闭处理。方向键和 Enter 保留导航及展开操作，空格仅用于分词。切换页签清空搜索。
+三个页签均无固定搜索框。直接键入字符进入搜索，空格分隔关键词，忽略大小写且全部命中；支持跨字段匹配。Tree 和 Processes 可匹配名称、机器、PID/PPID、显示格式的 CPU 和内存，Tree 还支持所属路径与已启用的监听字段。Backspace 删除字符，第一次 Esc 清空搜索，第二次 Esc 关闭弹层；Esc 使用局部 action 绑定，优先于 Popover 的默认关闭处理。方向键和 Enter 保留导航及展开操作，空格仅用于分词。切换页签清空搜索。
 
-监控对象是 Core 公开的 live 终端 PID 及真实 OS 后代。界面按 Space → Pane 展示，当前 Space 置顶；内部保留 Machine / Space / Tab / Pane 归属关系，展示时跳过 Tab 层。逻辑 parent 只定位展示层级；资源归属只使用 OS PPID。没有可靠 PID 绑定的 Desktop、Core、已脱离进程树的 daemon 和容器，不虚构计量桶。
+Herdr 范围监控 Core 公开的 live 终端 PID 及真实 OS 后代。Tree 按 Space → Pane 展示，当前 Space 置顶；内部保留 Machine / Space / Tab / Pane 归属关系，展示时跳过 Tab 层。逻辑 parent 只定位展示层级；资源归属只使用 OS PPID。没有可靠 PID 绑定的 Desktop、Core、已脱离进程树的 daemon 和容器，不虚构计量桶。System 范围枚举各机器的 OS 进程，Tree 按机器 → PPID 层级展示，缺失父进程作为根，环打断一条边。进程节点只显示自身资源，机器汇总按身份去重，不重复累加后代。
 
-Processes 直接使用 Machine 汇总中已去重的进程，不先展开资源树。每个进程显示一次，使用 machine + PID + start 身份稳定标识行；同 PID 的不同机器彼此独立，PID 复用会更换行标识。多个关键词同时匹配同一行，不补入父进程，PID 支持子串匹配。支持名称、PID、CPU、内存排序，CPU/内存排序时未知值排在已知值之后，过期 CPU/内存显示 `—`。该页共用 1 Hz 样本，使用虚拟列表，不增加 helper 调用或监听扫描。Tree 开启 Ports 后，非空关键词搜索会启用全机监听查询，沿用 5 秒间隔，不逐按键扫描。
+Processes 使用当前范围按机器去重的进程，不先展开资源树。每个进程显示一次，使用 machine + PID + start 身份稳定标识行；同 PID 的不同机器彼此独立，PID 复用会更换行标识。多个关键词同时匹配同一行，不补入父进程，PID 支持子串匹配。支持名称、PID、CPU、内存排序，CPU/内存排序时未知值排在已知值之后，过期 CPU/内存显示 `—`。该页共用 1 Hz 样本，使用虚拟列表，不增加监听扫描。三个页签的搜索都只过滤当前范围，不触发范围扩大。
+
+Ports 提供 Endpoint / Process / PID 平表，每 5 秒按当前作用域请求 TCP 监听。Herdr 只显示受管进程的监听，System 包含受管之外的监听，没有受管终端时仍可查询本机及工作区机器。按端口号、进程名或 PID 排序，键入过滤同一行的机器、监听地址、绑定范围、进程和 PID。监听使用该次扫描的进程身份，不向新快照中复用的 PID 借用名称；Herdr 再按 machine + PID + start 筛选归属。权限不足或采集失败时保留覆盖状态，空结果不表示端口空闲。
+
+Tree 工具栏提供展开全部、收起全部和定位当前 pane。定位返回 Herdr Tree、清空过滤、展开祖先并居中选中目标，支持终端与 Mod pane。错误及监听覆盖状态留在上方状态区；图标保留 tooltip 与辅助功能名称。摘要只显示当前机器，不跨机器相加。System 标为可读进程合计，部分覆盖明确标注；内存进程合计不是系统已用内存。
 
 功能只读，不提供清理、结束进程或重启服务操作。不读取进程命令行、环境变量或终端内容，不持久化采样数据，不发 HTTP 请求、不转发端口。内存趋势最多保留 60 个有效点，仅存于 View 内存。
 
@@ -39,10 +43,11 @@ footer 和弹层共用一个 Mod 实例，无共享 store 或第二个采样器�
 ## 调度与生命周期
 
 - 活跃应用每 1000 ms 采集 CPU/内存。同机请求合并，全局最多并发两台机器，较旧快照优先。单次 exec 超时 2000 ms。
-- 应用失活不启动新采样，清除 CPU 基线和监听调度时间；恢复后的首份 CPU 为未知。弹层关闭不影响 footer 采样。
-- 只在弹层的 Tree 页可见且 Ports 开启时采集监听，每 5000 ms 一次。默认只读受管进程；存在非空关键词时补充全机监听。输入修改合并到下一次 tick。切到 Processes、关闭 Ports 或关闭弹层后暂停端口采集。
+- 应用失活不启动新采样，清除 CPU 基线和监听调度时间，拒绝在途迟到结果；恢复后的首份 CPU 为未知。
+- System 只在弹层打开且该范围被选中时采集。关闭按钮、Esc 和 Popover dismissal 都恢复 Herdr；关闭后保留 footer 的受管采样。范围切换清除旧基线、监听缓存及全机展示缓存，拒绝旧范围在途结果。
+- 只在弹层 Ports 页可见，或 Tree 页可见且 Ports 开启时采集监听，每 5000 ms 一次，范围始终跟随选择器。切到 Processes、关闭 Tree 的 Ports 开关或关闭弹层后暂停端口采集。搜索不改变采集范围或扫描调度。
 - 连接、终端根或机器身份改变时作废旧基线。旧连接、已移除目标、已关闭 View 的迟到结果不合入新状态。
-- View 销毁后取消 timer，释放 InputState、FocusHandle、滚动句柄和历史。不会结束用户终端。
+- View 销毁后取消 timer，释放 FocusHandle、滚动句柄和历史。不会结束用户终端。
 - footer 和弹层按实际显示值比较；数值未变时，不因新快照时间推进主动重绘。CPU、行内容、状态或趋势改变时刷新。footer 悬停时更新 tooltip。
 
 ## 原生 helper
@@ -51,20 +56,20 @@ footer 和弹层共用一个 Mod 实例，无共享 store 或第二个采样器�
 
 ```sh
 node scripts/build-resource-helper.mjs
-mods/resource-monitor/bin/herdr-resource-sample --roots=123,456
-mods/resource-monitor/bin/herdr-resource-sample --roots=123,456 --ports
-mods/resource-monitor/bin/herdr-resource-sample --roots=123,456 --all-ports
+mods/resource-monitor/bin/herdr-resource-sample --roots=123,456 --scope=herdr
+mods/resource-monitor/bin/herdr-resource-sample --roots=123,456 --scope=herdr --ports
+mods/resource-monitor/bin/herdr-resource-sample --roots= --scope=system --ports
 ```
 
-Windows 生成 `.exe`。`--ports` 只扫描受管进程；`--all-ports` 同时保留其他进程元数据用于全机端口搜索。空 roots 返回空受管集合。未知参数、非法 PID 返回非零状态。
+Windows 生成 `.exe`。省略 `--scope` 默认 Herdr；System 不受 roots 限制，采集所有可枚举进程的可读指标。`--ports` 在当前范围补充监听。移除旧 `--all-ports` 参数，不保留兼容路径。空 roots 在 Herdr 返回空集合，在 System 仍枚举全机。未知参数、非法范围和非法 PID 返回非零状态。原生 helper 与 Mod 必须配套构建、部署。
 
 | 平台 | 拓扑 / 身份 | CPU / 内存 | 监听 |
 | --- | --- | --- | --- |
-| macOS | 按根 PID 查询子进程；BSDInfo 启动时间；全机元数据仅用于全机端口搜索 | pidrusage 累计 CPU、resident、footprint；Mach ticks 按 timebase 换算；读取后重查启动身份 | libproc FD 与 SocketFDInfo |
+| macOS | Herdr 按根 PID 查询子进程，System 枚举全机；BSDInfo 启动时间 | pidrusage 累计 CPU、resident、footprint；Mach ticks 按 timebase 换算；读取后重查启动身份 | libproc FD 与 SocketFDInfo |
 | Linux | `/proc/PID/stat` 的 PPID 与 starttime | utime/stime、CLK_TCK、RSS pages；meminfo | TCP 表与 FD socket inode 关联 |
 | Windows | Toolhelp；GetProcessTimes 创建时间 | 累计 FILETIME CPU、Working Set；GlobalMemoryStatusEx | GetExtendedTcpTable |
 
-macOS 常态不逐个查询全机进程的 BSDInfo。无子进程时清零 errno，避免 libproc 将合法空列表误判为失败。全机端口元数据的覆盖状态与受管进程覆盖状态独立。
+macOS 的 Herdr 常态不逐个查询全机 BSDInfo。无子进程时清零 errno，避免 libproc 将合法空列表误判为失败。System 覆盖状态不依赖是否开启 Ports；元数据不可读时保留 PID 和未知占位，指标不可读保持 null。监听单独保留错误状态，并在归属前复查进程身份。
 
 ### JSON 契约
 
@@ -83,6 +88,8 @@ macOS 常态不逐个查询全机进程的 BSDInfo。无子进程时清零 errno
 CPU = 累计 CPU 秒差 / 单调时间秒差 × 100。100% 代表一核。首次、缺失 start、PID 复用、计数回退、时间不前进或快照间隔超过 3 秒时显示未知。进程样本超过 3 秒后不计入实时 footer。
 
 macOS 主列、排序、趋势统一使用 Footprint，详情保留 RSS。Linux 为 RSS，Windows 为 Working Set。KB / MB / GB 的进位与 Orca 一致，按 1024 换算；未知显示 `—`，覆盖不完整时在 tooltip 和弹层中说明已知小计。相加仍可能重复共享页，不代表主机占用。
+
+Herdr 与 System 的节点 ID 和趋势相互独立。System 的机器趋势不因普通进程增减重置；进程趋势在 PID 复用时重置。完整覆盖且内存可读的新样本才追加趋势，缺失指标与错误样本不补零。
 
 监听有独立时间、拓扑与进程启动身份。CPU-only tick 保留该次监听元数据，不借用新 PID 的名字或资源。旧监听不能挂到复用的 PID。搜索无匹配不表示端口空闲；覆盖不足时明确显示。回环与通配地址只说明绑定范围，不证明服务可达。
 
@@ -118,4 +125,6 @@ macOS 主列、排序、趋势统一使用 Footprint，详情保留 RSS。Linux 
 
 按显示值抑制重绘前，相同场景的弹层增量约 2.19%；应用该优化后为约 0.89%。两轮基线存在变化，不能把差值当作固定收益。活跃负载下显示值可能每秒改变，仍需单独测量。
 
-目标为完整链路稳态不超过 0.5% 单核，验收上限 1%，helper 峰值 RSS 不超过 10 MiB。当前 helper 达到 1% 与 10 MiB 上限；原生应用短测增量接近 1% 上限，0.5% 目标尚未达到。完整链路未验收，尤其是 tooltip 悬停、数据频繁变化的弹层、远端 exec 包装与多机器并发。
+目标为完整链路稳态不超过 0.5% 单核，验收上限 1%，helper 峰值 RSS 不超过 10 MiB。上述受管场景的历史 helper 短测满足 1% 与 10 MiB 上限；原生应用短测增量接近 1% 上限，0.5% 目标尚未达到。完整链路未验收，尤其是 tooltip 悬停、数据频繁变化的弹层、远端 exec 包装与多机器并发。
+
+2026-11-12 新增 System 范围后，在 macOS arm64 用 `--roots= --scope system --samples=10 --ports-every=5` 短测，1 Hz，历时 10.00 秒。末次枚举 939 个进程，其中 730 个内存可读。helper 单核占用 1.55%，CPU 均值 15.52 ms／次，wall p95 为 210.45 ms，峰值 RSS 为 3.98 MiB，最大 JSON 为 134556 字节。Python 控制器另占约 0.37% 单核。该结果不含 Herdr IPC、生产 JS 和 GPUI；System helper 已超过上述 1% 上限，不能声明全链路性能达标。全机采集保持显式、面板内启用，不扩大默认 footer 的采集范围。

@@ -57,10 +57,10 @@ cargo check --locked --manifest-path native/resource-sample/Cargo.toml --target 
 ```sh
 python3 scripts/bench-resource-helper.py --roots=123,456 --samples=30
 python3 scripts/bench-resource-helper.py --roots=123,456 --samples=30 --ports-every=5
-python3 scripts/bench-resource-helper.py --roots=123,456 --samples=30 --ports-every=5 --all-ports
+python3 scripts/bench-resource-helper.py --roots= --samples=30 --scope system --ports-every=5
 ```
 
-脚本输出 JSON，分别统计 helper CPU、wall time、峰值 RSS、输出大小和 Python 控制器 CPU。默认采样间隔为 1 秒；三条命令分别测 footer、受管监听和全机端口搜索。结果不含 Herdr IPC、生产 JavaScript 或 GPUI，不能据此宣称完整链路性能达标。历史测量条件与数值见[设计文档](design/resource-monitor.md#性能口径)。
+脚本输出 JSON，分别统计 helper CPU、wall time、峰值 RSS、输出大小和 Python 控制器 CPU。默认采样间隔为 1 秒；三条命令分别测受管资源、受管监听和全机资源加监听。System 不依赖 roots；`lastRows` 与 `lastMeasuredProcesses` 分别记录末次枚举和可读内存的进程数。结果不含 Herdr IPC、生产 JavaScript 或 GPUI，不能据此宣称完整链路性能达标。历史测量条件与数值见[设计文档](design/resource-monitor.md#性能口径)。
 
 ## Mod 与布局的实机验证
 

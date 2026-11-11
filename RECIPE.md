@@ -15,7 +15,7 @@ Professional 是 Herdr Desktop 的完整工作区布局：左侧管理 Spaces �
 - Git Graph 是独立底部面板，初始高 420 px，范围 240 至 800 px，默认隐藏；可以与右侧 Files / Changes 同时显示。
 - 底部状态栏高 28 px，依次显示机器、分支、Agents 摘要、Git Graph 入口、CPU / 内存，以及最右侧原生命令面板提示。资源槽宽 164 px，命令提示槽宽 130 px。
 
-Resource Manager 从底部读数向上打开，宽度上限 416 px，高度上限 640 px，同时不超过窗口宽的 95% 和高的 85%。Tree 按 Space、Pane、OS 子进程分层；Processes 是 Name / PID / CPU / Memory 平表。内存用 1024 进位显示，CPU 低于 100% 时保留一位小数，达到 100% 后显示整数。
+Resource Manager 从底部读数向上打开，宽度上限 416 px，高度上限 640 px，同时不超过窗口宽的 95% 和高的 85%。`Herdr / System` 统一控制三个页签，每次打开默认 Herdr；切换范围保留关键词与排序，切换页签保留范围。Herdr Tree 按 Space、Pane、OS 子进程分层；System Tree 按机器、OS 父子进程分层。Processes 是 Name / PID / CPU / Memory 平表，Ports 是 Endpoint / Process / PID 平表。内存用 1024 进位显示，CPU 低于 100% 时保留一位小数，达到 100% 后显示整数；100% 代表一个核。
 
 ## How it behaves
 
@@ -61,7 +61,7 @@ Git Graph 支持提交、checkout、fetch、push 等写入或网络操作。查�
 
 弹层直接键入即可搜索，空格分词，全部词须命中同一行或所属路径。支持名称、机器、PID / PPID、CPU 和内存等字段。Backspace 删除；第一次 Esc 清空搜索，第二次关闭。方向键导航，Enter 展开或折叠 Tree；切换页面清空搜索。
 
-Tree 的 Ports 默认关闭。开启后每 5 秒采集监听端口，且只有非空搜索时才补充全机监听和未归属 Pane 的 Other processes。关闭 Ports 保留搜索词、隐藏端口行，只按其他字段匹配；Processes 不采集端口。
+Tree 的 Ports 默认关闭。开启后与 Ports 页一样，每 5 秒按当前作用域采集 TCP 监听。搜索只过滤，不再隐式扩展到全机。关闭 Ports 保留搜索词、隐藏端口行，只按其他字段匹配；Processes 不采集端口。System 仅在弹层打开时采集全机 CPU 和内存；关闭后恢复受管采集。footer 始终显示 Herdr 受管资源，System 摘要是可读进程合计，不代表主机已用内存。定位当前 pane 会返回 Herdr Tree。
 
 采集程序只读，不提权，不读取 argv、环境变量或终端内容，不保存采样历史、不结束进程、不转发端口。首次采样、PID 复用、计数回退、采样间隔过长或机器不可达时保留未知或错误状态。
 

@@ -291,6 +291,95 @@ export function buildResources({ terminals = [], spaces = [], panes = [], agents
   return [...machines.values()];
 }
 
+// OS process nodes carry only their own readings; the machine sums each identity once.
+export function buildSystemResources({ snapshots = new Map(), now = Date.now(), maxSampleAge = 10000 } = {}) {
+  const machines = [];
+  for (const [machineKey, snapshot] of snapshots) {
+    const machine = machineKey || null, channel = snapshot?.processes;
+    const metric = channel?.metric ?? (snapshot?.platform === "windows" ? "Working Set" : "RSS");
+    const root = base("machine", key("system-machine", machine), machine ?? "Local", machine, metric, channel?.at ?? null);
+    root.scope = "system";
+    root.snapshot = snapshot;
+    root.host = snapshot?.host ?? null;
+    root.platform = snapshot?.platform ?? null;
+    const fresh = usable(channel) && validNumber(channel.at) && channel.at <= now && now - channel.at <= maxSampleAge;
+    const stale = Boolean((usable(channel) && !fresh) || (!usable(channel) && channel?.at != null));
+    const table = new Map(), conflicts = new Set();
+    for (const row of channel?.rows ?? []) {
+      if (!Number.isInteger(row.pid) || row.pid <= 0) continue;
+      if (table.has(row.pid)) {
+        if (key(table.get(row.pid)) !== key(row)) conflicts.add(row.pid);
+      } else table.set(row.pid, row);
+    }
+    for (const pid of conflicts) table.delete(pid);
+    const nodes = new Map();
+    const listeners = usable(snapshot?.listeners) ? snapshot.listeners.rows ?? [] : [];
+    const footprintChannel = snapshot?.footprints;
+    const footprints = new Map((usable(footprintChannel) ? footprintChannel.rows ?? [] : []).map(row => [row.pid, row]));
+    const freshFootprints = fresh && snapshot?.platform === "macos" && validNumber(footprintChannel?.at)
+      && footprintChannel.at <= now && now - footprintChannel.at <= 15000;
+    for (const row of table.values()) {
+      const process = { ...row, machine, identity: processKey(machine, row),
+        cpu: fresh && validNumber(row.cpu) ? row.cpu : null,
+        memory: fresh && validNumber(row.memory) ? row.memory : null };
+      const footprint = footprints.get(row.pid);
+      process.footprint = freshFootprints && row.start && footprint?.start === row.start && validNumber(footprint.bytes) ? footprint.bytes : null;
+      process.footprintAt = process.footprint !== null ? footprintChannel.at : null;
+      const node = base("system-process", key("system-process", machine, row.pid, row.start ?? null), row.name || `PID ${row.pid}`, machine, metric, root.at);
+      node.pid = row.pid;
+      node.process = process;
+      node.processes = [process];
+      node.cpu = process.cpu;
+      node.memory = process.memory;
+      node.footprint = process.footprint;
+      node.footprintAt = process.footprintAt;
+      node.unknown = !row.start || process.cpu === null || process.memory === null ? 1 : 0;
+      node.completeOwnership = channel?.state === "ready" && conflicts.size === 0;
+      node.historyValid = fresh && node.completeOwnership && Boolean(row.start) && process.memory !== null;
+      node.ports = portsFor(listeners, machine, new Map(row.start ? [[row.pid, row.start]] : []));
+      nodes.set(row.pid, node);
+    }
+    // Break one edge per PPID cycle. Every enumerable process remains reachable.
+    const parents = new Map([...table.values()].map(row => [row.pid, nodes.has(row.ppid) ? row.ppid : null]));
+    const done = new Set();
+    for (const pid of nodes.keys()) {
+      const path = new Set();
+      let current = pid;
+      while (current !== null && !done.has(current) && !path.has(current)) {
+        path.add(current);
+        current = parents.get(current);
+      }
+      if (path.has(current)) parents.set(current, null);
+      for (const member of path) done.add(member);
+    }
+    for (const [pid, node] of nodes) (nodes.get(parents.get(pid)) ?? root).children.push(node);
+    root.processes = [...nodes.values()].map(node => node.process);
+    root.cpu = fresh ? sum(root.processes, "cpu") : null;
+    root.memory = fresh ? sum(root.processes, "memory") : null;
+    root.unknown = [...nodes.values()].reduce((total, node) => total + node.unknown, conflicts.size);
+    if (channel?.state !== "ready") root.unknown++;
+    root.completeOwnership = channel?.state === "ready" && conflicts.size === 0;
+    root.historyValid = fresh && root.completeOwnership && root.processes.length > 0
+      && root.processes.every(process => process.start && validNumber(process.memory));
+    root.ports = portsFor(listeners, machine, new Map(root.processes.filter(process => process.start).map(process => [process.pid, process.start])));
+    if (root.historyValid && root.processes.every(process => process.footprint !== null)) {
+      root.footprint = sum(root.processes, "footprint");
+      root.footprintAt = footprintChannel.at;
+    }
+    for (const node of [root, ...nodes.values()]) {
+      node.processState = channel?.state ?? "loading";
+      node.stale = stale;
+      node.status = !usable(channel) ? node.processState : stale ? "stale" : node.unknown || channel.state === "partial" ? "partial" : "ready";
+      node.message = channel?.message ?? (stale ? "Process sample is stale" : node.unknown ? "Known subtotal; some process information is unknown" : null);
+      node.portsState = snapshot?.listeners?.state ?? "loading";
+      node.portsAt = snapshot?.listeners?.at ?? null;
+      node.portCount = node.portsState === "ready" ? node.ports.length : null;
+    }
+    machines.push(root);
+  }
+  return machines;
+}
+
 export class MemoryHistory {
   constructor() { this.entries = new Map(); }
   update(nodes, observedAt) {
