@@ -1,13 +1,15 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { buildResources, MemoryHistory, binding } from "./mods/resource-monitor/model.js";
-import { buildResourceTree, resourceRows } from "./mods/resource-monitor/tree.js";
-import { parsePs, parseLsof, parseSs, parseMeminfo, parseMemoryPressure, parseTop, parseWindowsProcesses, parseWindowsListeners } from "./mods/resource-monitor/collect.js";
+import { buildResourceTree, processRows, resourceRows } from "./mods/resource-monitor/tree.js";
+import { parseNative, createCollector } from "./mods/resource-monitor/collect.js";
 
 const at = 100000;
 const process = (pid, ppid = 0, memory = 10, extra = {}) => ({ pid, ppid, memory, cpu: 1, name: `p${pid}`, start: `start-${pid}`, ...extra });
 const terminal = (address, pid, extra = {}) => ({ address, pid, state: "live", ...extra });
-const channel = (rows = [], extra = {}) => ({ state: "ready", at, rows, message: null, ...extra });
+const channel = (rows = [], extra = {}) => ({ state: "ready", at,
+  rows: rows.map(row => row.protocol === "tcp" && row.start === undefined ? {...row, start: `start-${row.pid}`} : row),
+  message: null, ...extra });
 const snapshot = (rows, extra = {}) => ({ machine: null, platform: "macos", at, processes: channel(rows), listeners: channel(), footprints: channel([], { state: "unavailable" }), host: { state: "ready", at, total: 1000, available: 400, message: null }, ...extra });
 const layout = [{ id: "s1", name: "Work", machine: null, tabs: [{ id: "tab1", name: "Task" }] }];
 const placed = { labels: { "herdr.space": "s1", "herdr.tab": "tab1" } };
@@ -16,6 +18,57 @@ function build(terminals, rows, options = {}) {
 }
 function all(nodes) { return nodes.flatMap(node => [node, ...all(node.children)]); }
 const leaf = (nodes, address) => all(nodes).find(node => node.address === address);
+
+test("flat processes show nested roots once, include children, and do not depend on expanded groups", () => {
+  const nodes = build([terminal("a", 10, placed), terminal("b", 20, placed)],
+    [process(10), process(11, 10), process(20, 10), process(21, 20)]);
+  const before = structuredClone(nodes);
+  const rows = processRows(nodes, { sort: "pid" });
+  assert.deepEqual(rows.map(row => row.process.pid), [10, 11, 20, 21]);
+  assert.ok(rows.every(row => row.type === "process" && row.depth === 0));
+  assert.equal(new Set(rows.map(row => row.id)).size, 4);
+  const ambiguous = build([terminal("a", 10, placed), terminal("b", 10, placed)], [process(10), process(11, 10)]);
+  assert.deepEqual(processRows(ambiguous, { sort: "pid" }).map(row => row.process.pid), [10, 11]);
+  assert.deepEqual(nodes, before);
+});
+
+test("flat process filters match the same row without keeping parents; sorts use per-process metrics", () => {
+  const nodes = build([terminal("a", 10, placed)],
+    [process(10, 0, 10, { name: "shell", cpu: null }), process(11, 10, 20, { name: "Web worker", cpu: 0 }),
+      process(12, 10, null, { name: "compiler", cpu: 8 })]);
+  assert.deepEqual(processRows(nodes, { filters: { name: "WEB", pid: "11" } }).map(row => row.process.pid), [11]);
+  assert.deepEqual(processRows(nodes, { filters: { name: "Web", pid: "10" } }), []);
+  assert.deepEqual(processRows(nodes, { filters: { pid: "1" } }), []);
+  assert.deepEqual(processRows(nodes).map(row => row.process.pid), [11, 10, 12]);
+  assert.deepEqual(processRows(nodes, { sort: "cpu" }).map(row => row.process.pid), [12, 11, 10]);
+  assert.deepEqual(processRows(nodes, { sort: "name" }).map(row => row.process.pid), [12, 10, 11]);
+});
+
+test("flat process identities separate equal PIDs on different machines and reset on PID reuse", () => {
+  const options = { spaces: [layout[0], { id: "ssh/s2", machine: "ssh", tabs: [{ id: "ssh/tab1" }] }],
+    snapshots: new Map([["", snapshot([process(10)])], ["ssh", snapshot([process(10)])]]) };
+  const nodes = build([terminal("a", 10, placed), terminal("ssh/b", 10, { labels: { "herdr.tab": "tab1" } })], [], options);
+  const rows = processRows(nodes);
+  assert.equal(rows.length, 2);
+  assert.notEqual(rows[0].id, rows[1].id);
+  assert.deepEqual(processRows(nodes, { filters: { name: "SSH" } }).map(row => row.node.machine), ["ssh"]);
+  const changedMetrics = build([terminal("a", 10, placed)], [process(10, 0, 100)]);
+  assert.equal(processRows(changedMetrics)[0].id, rows.find(row => row.node.machine === null).id);
+  const reused = build([terminal("a", 10, placed)], [process(10, 0, 100, { start: "new-start" })]);
+  assert.notEqual(processRows(reused)[0].id, processRows(changedMetrics)[0].id);
+});
+
+test("flat process rows keep unknown and stale metrics unknown rather than showing zero or old readings", () => {
+  const nodes = build([terminal("a", 10, placed)], [process(10, 0, null, { cpu: null })]);
+  assert.equal(processRows(nodes)[0].process.cpu, null);
+  assert.equal(processRows(nodes)[0].process.memory, null);
+  const stale = build([terminal("a", 10, placed)], [process(10)], { now: at + 11000 });
+  const row = processRows(stale)[0];
+  assert.equal(row.node.stale, true);
+  assert.equal(row.process.cpu, null);
+  assert.equal(row.process.memory, null);
+  assert.equal(stale[0].processes[0].memory, 10);
+});
 
 test("display merges terminal panes, retains logical children and mod panes, and preserves metrics", () => {
   const nodes = build([terminal("t1", 10), terminal("t2", 20, { parent: "t1" }), terminal("t3", 30)],
@@ -32,12 +85,32 @@ test("display merges terminal panes, retains logical children and mod panes, and
   assert.equal(all(tree).filter(node => node.kind === "pane").length, 1);
   const expanded = new Set(all(tree).map(node => node.id));
   const rows = resourceRows(tree, { expanded });
-  assert.deepEqual(rows.filter(row => row.depth === 2).map(row => row.node.address ?? row.node.name), ["t3", "t1", "Files"]);
-  assert.equal(rows.find(row => row.node.address === "t2").depth, 3);
+  assert.deepEqual(rows.filter(row => row.depth === 1).map(row => row.node.address ?? row.node.name), ["t3", "t1", "Files"]);
+  assert.equal(rows.find(row => row.node.address === "t2").depth, 2);
   assert.equal(rows.filter(row => row.type === "process").length, 3);
   assert.equal(resourceRows(tree).length, 1);
-  assert.equal(resourceRows(tree, { expanded, sort: "name" }).find(row => row.depth === 2).node.name, "Files");
+  assert.equal(resourceRows(tree, { expanded, sort: "name" }).find(row => row.depth === 1).node.name, "Files");
   assert.deepEqual(nodes, before);
+});
+
+test("panes from multiple tabs sit directly under their space without changing totals or search paths", () => {
+  const nodes = build([terminal("a", 10, placed),
+    terminal("b", 20, { labels: { "herdr.space": "s1", "herdr.tab": "tab2" } })],
+  [process(10), process(20, 0, 20)], {
+    spaces: [{ ...layout[0], tabs: [...layout[0].tabs, { id: "tab2", name: "Hidden tab" }] }],
+    panes: [{ pane: "p1", tab: "tab1", terminal: "a", title: "First pane" },
+      { pane: "p2", tab: "tab2", terminal: "b", title: "Second pane" }]
+  });
+  const tree = buildResourceTree(nodes);
+  assert.equal(tree[0].kind, "space");
+  assert.deepEqual(tree[0].children.map(node => node.pane), ["p1", "p2"]);
+  assert.equal(all(tree).some(node => node.kind === "tab"), false);
+  assert.equal(tree[0].memory, 30);
+  assert.equal(tree[0].cpu, 2);
+  const filtered = buildResourceTree(nodes, { filters: { pid: "20", name: "Second pane" } });
+  assert.deepEqual(filtered[0].children.map(node => node.pane), ["p2"]);
+  assert.equal(filtered[0].children[0].visibleProcesses[0].pid, 20);
+  assert.deepEqual(buildResourceTree(nodes, { filters: { name: "Hidden tab" } }), []);
 });
 
 test("name searches retain matching pane metadata, process names and enclosing paths", () => {
@@ -346,43 +419,88 @@ test("stale, failed, unknown identity and incomplete samples never append trends
   assert.deepEqual(history.get(leaf(unidentified, "t1")), []);
 });
 
-test("Unix process records preserve stable identity, bytes and multi-core CPU; malformed coverage is partial", () => {
-  const result = parsePs(" 10 1 125.5 2048 Wed Nov 11 12:00:00 2026 /Applications/Some App/node\ninvalid record\n", at);
-  assert.equal(result.state, "partial");
-  assert.deepEqual(result.rows, [{ pid: 10, ppid: 1, cpu: 125.5, memory: 2097152, start: "Wed Nov 11 12:00:00 2026", name: "node" }]);
-  assert.equal(parsePs("", at).state, "error");
+const native = (seconds = 1, start = "created", extra = {}) => JSON.stringify({schema: 1, platform: "macos", monotonic: 100,
+  topologyComplete: true, rows: [{pid: 10, ppid: 1, name: "node", start, memory: 4096, footprint: 2048, seconds}],
+  host: {total: 100000, available: null}, listeners: null, ...extra});
+
+test("listener caching retains unassigned process names and never attaches an old listener to a reused PID", async () => {
+  const listener = {pid: 10, family: "ipv4", protocol: "tcp", address: "127.0.0.1", port: 8080, socket: null};
+  let response = native(1, "created", {listeners: {complete: true, scope: "all", rows: [listener]}});
+  const collector = createCollector(async () => ({code: 0, stdout: response, stderr: ""}), () => "/helper");
+  const first = await collector.sample(null, {roots: [10], ports: true, allPorts: true});
+  assert.equal(first.listeners.rows[0].start, "created");
+  response = native(2, "reused", {monotonic: 101});
+  const next = await collector.sample(null, {roots: [10]});
+  assert.equal(next.listeners.processes[0].name, "node");
+  const nodes = build([terminal("t1", 10, placed)], [], {now: next.at, snapshots: new Map([["", next]])});
+  assert.deepEqual(leaf(nodes, "t1").ports, []);
+  assert.equal(leaf(nodes, "t1").cpu, null);
 });
 
-test("socket parsers retain shared identity, wildcard families and hidden-owner uncertainty", () => {
-  const lsof = parseLsof("p10\0\nf3\0tIPv4\0D0xabc\0i0\0n*:3000\0PTCP\0\nf4\0tIPv4\0D0xabc\0n*:3000\0PTCP\0\nf5\0tIPv6\0D0xdef\0n[::1]:3000\0PTCP\0\n", at);
-  assert.equal(lsof.state, "partial");
-  assert.deepEqual(lsof.rows.map(p => [p.address, p.family, p.socket]), [["0.0.0.0", "ipv4", "device:0xabc"], ["::1", "ipv6", "device:0xdef"]]);
-  const ss = parseSs('LISTEN 0 128 127.0.0.1:3000 0.0.0.0:* users:(("node",pid=10,fd=3),("node",pid=11,fd=4)) ino:55\nLISTEN 0 128 [::]:4000 [::]:* ino:56 v6only:1\n', at);
-  assert.equal(ss.state, "partial");
-  assert.deepEqual(ss.rows.map(p => [p.pid, p.address, p.socket]), [[10, "127.0.0.1", "inode:55"], [11, "127.0.0.1", "inode:55"], [0, "::", "inode:56"]]);
-  assert.equal(parseSs("LISTEN 0 128 *:3000 *:*", at).state, "error");
+test("native snapshots preserve memory units, first-sample uncertainty and strict CPU windows", () => {
+  const first = parseNative(native(), null, at);
+  assert.equal(first.processes.rows[0].cpu, null);
+  assert.equal(first.processes.rows[0].memory, 2048);
+  assert.equal(first.processes.rows[0].resident, 4096);
+  assert.equal(first.processes.metric, "Footprint");
+  assert.equal(first.host.available, null);
+  const previous = {at, monotonic: first.monotonic, rows: first.processes.rows};
+  const next = (seconds, start, monotonic = 102, wall = at + 2000) => parseNative(native(seconds, start, {monotonic}), previous, wall);
+  assert.equal(next(4, "created").processes.rows[0].cpu, 150);
+  assert.equal(next(4, "reused").processes.rows[0].cpu, null);
+  assert.equal(next(0, "created").processes.rows[0].cpu, null);
+  assert.equal(next(null, "created").processes.rows[0].cpu, null);
+  assert.equal(next(4, "created", 110, at + 10000).processes.rows[0].cpu, null);
+  assert.equal(next(4, "created", 102, at + 10000).processes.rows[0].cpu, null);
+  assert.equal(next(4, "created", 100).processes.rows[0].cpu, null);
+  for (const platform of ["linux", "windows"]) {
+    const data = parseNative(native(1, "created", {platform}));
+    assert.equal(data.processes.rows[0].memory, 4096);
+    assert.equal(data.footprints.state, "unavailable");
+  }
 });
 
-test("host parsers never substitute free pages for available memory, and footprint keeps its own units", () => {
-  assert.equal(parseMeminfo("MemTotal: 1000 kB\nMemFree: 20 kB\n", at).state, "unavailable");
-  assert.equal(parseMeminfo("MemTotal: 1000 kB\nMemAvailable: 400 kB\n", at).available, 409600);
-  assert.equal(parseMemoryPressure("The system has 1024000 (250 pages with a page size of 4096).\nSystem-wide memory free percentage: 40%", at).available, 409600);
-  const result = parseTop("PID MEM\n10 1.5G+\n11 512K-\n", [{ pid: 10, start: "stable" }], at);
-  assert.deepEqual(result.rows, [{ pid: 10, start: "stable", bytes: 1610612736 }, { pid: 11, start: null, bytes: 524288 }]);
+test("native parser rejects malformed coverage and preserves independent listener failure", () => {
+  for (const value of ["{}", native(1, "created", {schema: 2}), native(1, "created", {monotonic: -1}), native(1, "created", {rows: [{pid: 10}]}), native(1, "created", {listeners: {complete: true, rows: [{pid: 1}]}})]) {
+    assert.throws(() => parseNative(value));
+  }
+  const partial = parseNative(native(1, "created", {topologyComplete: false, listenerError: true}));
+  assert.equal(partial.processes.state, "partial");
+  assert.equal(partial.processes.rows[0].memory, 2048);
+  assert.equal(partial.listeners.state, "error");
+  assert.equal(partial.footprints.rows[0].start, "created");
+  const empty = parseNative(native(1, "created", {rows: []}));
+  assert.deepEqual(empty.processes.rows, []);
+  assert.equal(empty.listeners.state, "unavailable");
 });
 
-test("Windows CPU uses elapsed time and start identity; warmup, reuse and stale intervals remain unknown", () => {
-  const json = (seconds, start = "created") => JSON.stringify({ rows: [{ pid: 10, ppid: 1, name: "node.exe", start, memory: 4096, seconds }] });
-  const first = parseWindowsProcesses(json(1), null, at);
-  assert.equal(first.rows[0].cpu, null);
-  assert.equal(parseWindowsProcesses(json(4), first, at + 2000).rows[0].cpu, 150);
-  assert.equal(parseWindowsProcesses(json(4, "reused"), first, at + 2000).rows[0].cpu, null);
-  assert.equal(parseWindowsProcesses(json(4), first, at + 10001).rows[0].cpu, null);
-  assert.equal(parseWindowsProcesses(json(22), first, at + 10500, 15000).rows[0].cpu, 200);
-  assert.equal(parseWindowsProcesses(json(22), first, at + 15001, 15000).rows[0].cpu, null);
-  assert.equal(parseWindowsProcesses(json(null), first, at + 2000).rows[0].cpu, null);
-  assert.equal(parseWindowsProcesses(json(0), first, at + 2000).rows[0].cpu, null);
-  const ports = parseWindowsListeners(JSON.stringify({ rows: [{ pid: 10, address: "::1", port: 3000 }, { pid: 0, address: "0.0.0.0", port: 80 }] }), at);
-  assert.equal(ports.state, "partial");
-  assert.deepEqual(ports.rows.map(p => p.family), ["ipv6", "ipv4"]);
+test("collector coalesces concurrent requests and only asks for ports explicitly", async () => {
+  const calls = []; let resolve;
+  const collector = createCollector((...args) => { calls.push(args); return new Promise(r => {resolve = r;}); }, () => "/helper");
+  const first = collector.sample(null, {roots: [20, 10, 10, null]});
+  const second = collector.sample(null, {roots: [10], ports: true});
+  assert.equal(first, second);
+  assert.deepEqual(calls[0].slice(0, 2), ["/helper", ["--roots=10,20"]]);
+  resolve({code: 0, stdout: native(), stderr: ""});
+  assert.equal((await first).processes.state, "ready");
+  const third = collector.sample("remote", {roots: [10], ports: true});
+  assert.equal(calls[1][0], "herdr-resource-sample");
+  assert.deepEqual(calls[1][1], ["--roots=10", "--ports"]);
+  assert.equal(calls[1][2].on, "remote");
+  resolve({code: 0, stdout: native(), stderr: ""});
+  await third;
+});
+
+test("invalidation ignores late success; a missing helper never launches a heavy fallback", async () => {
+  let resolve; const calls = [];
+  const collector = createCollector((program) => { calls.push(program); return new Promise(r => {resolve = r;}); }, () => "/helper");
+  const pending = collector.sample(null, {roots: [10]});
+  collector.forget(null);
+  resolve({code: 0, stdout: native(), stderr: ""});
+  assert.equal(await pending, null);
+  const broken = createCollector(async program => { calls.push(program); throw new Error("missing"); }, () => "/missing");
+  const result = await broken.sample(null, {platform: "macos", roots: [10]});
+  assert.equal(result.processes.state, "error");
+  assert.equal(result.host.total, null);
+  assert.deepEqual(calls, ["/helper", "/missing"]);
 });

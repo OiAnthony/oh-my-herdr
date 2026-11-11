@@ -24,7 +24,7 @@ async function fixture(t) {
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const sourceRoot = join(root, "source"), home = join(root, "home");
   await fs.mkdir(home);
-  const manifest = { name: "oh-my-herdr", version: "0.3.0", herdrVersion: "0.1.14",
+  const manifest = { name: "oh-my-herdr", version: "0.3.0", herdrVersion: "0.1.15",
     mods: names.map(name => ({ name, source: `mods/${name}` })),
     layouts: [{ name: "Professional", source: "layouts/professional/Professional.json", preview: "layouts/professional/Professional.svg" }] };
   await put(sourceRoot, "oh-my-herdr.json", JSON.stringify(manifest));
@@ -58,6 +58,33 @@ test("home precedence and explicit empty environment object", () => {
   assert.equal(resolveHome(undefined, { HERDR_APP_HOME: "/environment", XDG_CONFIG_HOME: "/xdg" }, "/user"), "/environment");
   assert.equal(resolveHome(undefined, { XDG_CONFIG_HOME: "/xdg" }, "/user"), "/xdg/herdr-app");
   assert.equal(resolveHome(undefined, {}, "/user"), "/user/.config/herdr-app");
+});
+
+test("native helper is required, installed executable, repaired and rolled back with its mode", async t => {
+  const { sourceRoot, home, options } = await fixture(t);
+  const manifest = JSON.parse(await fs.readFile(join(sourceRoot, "oh-my-herdr.json")));
+  manifest.mods.find(mod => mod.name === "resource-monitor").nativeHelper = true;
+  await put(sourceRoot, "oh-my-herdr.json", JSON.stringify(manifest));
+  await assert.rejects(install(home, options), /Missing native resource helper/);
+  const path = `mods/resource-monitor/bin/herdr-resource-sample${process.platform === "win32" ? ".exe" : ""}`;
+  await put(sourceRoot, path, "native-v1");
+  await install(home, options);
+  assert.equal((await fs.readFile(join(home, path))).toString(), "native-v1");
+  if (process.platform !== "win32") {
+    assert.ok((await fs.stat(join(home, path))).mode & 0o100);
+    await fs.chmod(join(home, path), 0o644);
+    await assert.rejects(check(home, { ...options, runCheck: async () => ({}) }), /not executable/);
+    await install(home, options);
+    assert.ok((await fs.stat(join(home, path))).mode & 0o100);
+  }
+  await put(sourceRoot, path, "native-v2");
+  await assert.rejects(install(home, { ...options, beforeCommit: ({path: target}) => {
+    if (target === recordPath) throw new Error("fail native update");
+  }}), /fail native update/);
+  assert.equal((await fs.readFile(join(home, path))).toString(), "native-v1");
+  if (process.platform !== "win32") assert.ok((await fs.stat(join(home, path))).mode & 0o100);
+  await uninstall(home);
+  await assert.rejects(fs.stat(join(home, path)), {code: "ENOENT"});
 });
 
 test("first deploy excludes generated/private files and preserves every unowned file", async t => {

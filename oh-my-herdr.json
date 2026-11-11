@@ -1,7 +1,7 @@
 {
   "name": "oh-my-herdr",
   "version": "0.3.0",
-  "herdrVersion": "0.1.14",
+  "herdrVersion": "0.1.15",
   "mods": [
     {
       "name": "open-with",
@@ -21,6 +21,7 @@
     {
       "name": "resource-monitor",
       "source": "mods/resource-monitor",
+      "nativeHelper": true,
       "provenance": {
         "origin": "Native read-only process-tree resources and TCP listener monitor; original workspace implementation."
       }

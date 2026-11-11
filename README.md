@@ -1,16 +1,17 @@
 # oh-my-herdr
 
-一个包含布局、四个独立功能 Mods 和四个布局适配 Mods 的 Herdr Desktop 扩展项目。当前发布版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.14`；下述 Resources 功能属于未发布修改。
+一个包含布局、四个独立功能 Mods 和四个布局适配 Mods 的 Herdr Desktop 扩展项目。当前发布版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.15`；下述 Resources 功能属于未发布修改。
 
 源码统一放在 `desktop/extensions/oh-my-herdr/`，项目内包含 `layouts/`、`mods/`、快捷键预设、安装脚本和文档。它不是单个带路由器的 Mod；运行时仍部署为 Herdr 原生的多个 Mod 目录。不修改 Herdr 本体、内置 Mods 或内置布局；安装器按绑定合并快捷键，不覆盖整份个人配置。
 
 ## 安装与启用
 
-需要 Node.js 和已安装的 `herdr-app`。先用目标应用目录启动一次 Herdr，生成内置模块、图标及类型声明。
+需要 Node.js 和已安装的 `herdr-app`。从源码构建 Resources helper 时还需要 Rust；macOS 需要 Xcode Command Line Tools。helper 随 Mod 安装，运行时不需要 Rust。先用目标应用目录启动一次 Herdr，生成内置模块、图标及类型声明。
 
 在工作区根目录执行：
 
 ```sh
+node desktop/extensions/oh-my-herdr/scripts/build-resource-helper.mjs
 node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs install
 node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs check
 ```
@@ -21,7 +22,7 @@ node desktop/extensions/oh-my-herdr/oh-my-herdr.mjs check
 herdr-app do layout.switch '{"name":"Professional"}'
 ```
 
-最后一条命令会改变当前窗口的布局。安装或检查不会替你执行它。`Professional` 使用个人标签栏副本，保留 Files、Changes，并将 `+` 改为默认启动项和下拉菜单的双段按钮。右上角依次排列 Files、Changes、`+`、Open With，让两个启动入口相邻，菜单内容保持独立。底部 statusline 按机器、分支、agents、Git Graph 的顺序显示，原生命令面板提示保留在最右侧。左侧 footer 只保留 Settings、Add machine。
+最后一条命令会改变当前窗口的布局。安装或检查不会替你执行它。`Professional` 使用个人标签栏副本，保留 Files、Changes，并将 `+` 改为默认启动项和下拉菜单的双段按钮。右上角依次排列 Files、Changes、`+`、Open With，让两个启动入口相邻，菜单内容保持独立。底部 statusline 显示机器、分支、agents、Git Graph、实时 Resources 数据，原生命令面板提示保留在最右侧。左侧 footer 只保留 Settings、Add machine。
 
 指定其他应用目录时，对每条命令使用同一目录：
 
@@ -44,7 +45,7 @@ HERDR_APP_HOME=/private/var/tmp/oh-my-herdr-app herdr-app do layout.switch '{"na
 | Professional | `layouts/professional/` | 自定义工作区布局和预览图 |
 | open-with | `mods/open-with/` | 选择本机应用打开当前仓库或目录；VS Code 支持 Remote - SSH |
 | git-graph | `mods/git-graph/` | Git 历史图、Manygit、详情、操作菜单与确认对话框 |
-| professional-status | `mods/professional-status/` | 布局适配器：机器、分支、agents、Git Graph、Resources 入口与命令面板提示 |
+| professional-status | `mods/professional-status/` | 布局适配器：机器、分支、agents、Git Graph 与命令面板提示 |
 | agent-launcher | `mods/agent-launcher/` | 启动菜单、按机器保存默认项、自定义命令编辑器 |
 | resource-monitor | `mods/resource-monitor/` | 按机器和终端归属展示 CPU、内存、子进程与 TCP 监听端口 |
 | tabs-professional | `mods/tabs-professional/` | 标签栏适配器：标签管理、Files/Changes 和默认启动按钮 |
@@ -79,29 +80,31 @@ diff pane title 显示相对路径，完整标题可通过悬停查看。普通�
 
 Graph 的 Changes 跳转只在布局显式提供绑定且目标与内置 Changes 一致时显示；独立 pane、异仓库或 Manygit 子仓库不会误跳到当前窗口的另一个仓库。
 
-## 查看子进程与监听端口
+## 查看资源、子进程与监听端口
 
-安装包含未发布修改的套件后，在 Professional 底部状态栏点击 **Resources**。它打开应用内浮动面板，不改变布局。重复点击替换同名面板，不叠加采样实例；关闭按钮或 Esc 关闭并释放采样状态。此功能不需要配置文件、账号或常驻 helper。
+Professional footer 直接显示当前机器受管终端的 CPU 和内存，各配图标，不显示 `≈` 或终端数。点击打开向上、靠右对齐的 Resource Manager 弹层；点击外部、关闭按钮或 Esc 关闭。footer 与弹层由同一个 `resource-monitor` View 管理，共享一套采样。
 
-面板默认使用 Tree，展示全部 Spaces。当前 Space 置顶，自动展开到 Tab 和 Pane，其他 Spaces 初始折叠。终端与承载它的 Pane 合为一行，统一显示 Pane，不区分 Agent 和 Terminal；悬停可查看原 Pane 标题、标识及终端地址。切换当前 Space 后，新 Space 置顶并展开；远端 Space 显示机器名前缀。展开 Pane 可查看真实 OS 进程树、PID/PPID、根进程、前台进程和监听地址。无 pane 的子终端沿 Core 逻辑 parent 挂到同 tab 的父终端下，同样显示为 Pane；有 pane 的终端保留显式位置，非终端 Pane 保留独立行。合并行显示终端自身归属的资源，资源归属仍只使用 OS PPID，逻辑父子关系不改变终端自身计量；Tab、Space 等上层分组按进程身份去重汇总。
+- 界面沿用 Orca 的弹层样式：416 px 弹层、640 px 高度上限、Resource Manager 标题、Resources / PTYs / Processes 页签、CPU / Memory 摘要、Name / CPU / Memory 表头。内存按 1024 进位显示为 KB、MB、GB，未知值显示 `—`。覆盖不完整时在 tooltip 和弹层中说明已知小计。
+- Resources 按 Space → Pane 展示，省略 Tab 层；当前 Space 置顶并展开。终端与 Pane 合并显示，保留非终端 Pane。展开可查看 OS 进程树、PID/PPID 和采样年龄。Tab 信息仅用于内部归属解析。资源按 OS PPID 归属；Core 的逻辑 parent 只影响展示位置。嵌套终端根、重复根与分组汇总按进程身份去重。
+- Processes 将受管终端及其 OS 子进程铺平，一行一个进程，无需展开 Space 或 Pane。列为 Name / PID / CPU / Memory；支持名称或机器名称搜索、精确 PID 筛选，按名称、PID、CPU、内存排序。默认内存降序，PID 升序；悬停显示机器、PPID、启动身份与内存口径。使用已有按机器去重的快照和虚拟列表，不新增采样器，也不触发端口或全机进程扫描。
+- PTYs 页提供名称/地址、PID、端口筛选。PID 与端口精确匹配，组合条件要求同一进程命中。只有输入端口条件时，才补充全机监听进程及未归属 Pane 的 Other processes。方向键与 Enter/空格展开、折叠，`/` 聚焦名称输入。默认内存降序，可按名称或 CPU 排序。
+- 活跃应用每秒采集 CPU 和内存，同机请求合并，最多并发两台机器；失活暂停采集，恢复后重新建立 CPU 基线。弹层关闭时 footer 继续采样。关闭所属 View 才取消定时器、释放句柄并忽略迟到结果。footer 和弹层的显示内容未变时，不因新采样主动重绘；悬停时更新 footer 的 CPU 提示。
+- 监听端口只在 PTYs 页打开时采集，每 5 秒一次。默认只读受管进程的 FD；全机端口搜索成本更高，只在端口筛选期间启用。输入条件合并到下一次采样，不逐按键执行扫描。监听记录保留自己的进程元数据及启动身份，避免 PID 复用后误挂旧端口。
+- CPU 使用相邻累计 CPU 时间与单调时钟差计算，100% 表示一个核心，可超过 100%。首次、PID 复用、计数回退或间隔超过 3 秒时显示未知。macOS 主内存列使用 footprint，RSS 留在详情；Linux 使用 RSS，Windows 使用 Working Set。共享页仍可能重复计入，不代表主机物理内存占用。
 
-- 顶部提供 Expand all / Collapse all，一键展开或收起当前结果。默认内存降序，可切换名称、CPU 排序；当前 Space 始终置顶。搜索拆为名称/地址、PID、端口三个输入框，条件同时生效；名称也匹配进程名，PID 和端口精确匹配。修改条件自动展开命中路径，之后仍可收起全部；清空条件恢复完整树，筛选不改变原始资源总量。方向键移动及展开/折叠，Enter/空格切换展开，`/` 聚焦名称输入框；Tab 可进入搜索、排序、展开/收起、刷新间隔、刷新和关闭控件。
-- 端口搜索基于已采集机器的 TCP LISTEN 快照，显示命中进程的 PID/PPID、OS 父进程链、监听地址及所属 Pane；未归属 Pane 的监听进程单列在对应机器的 Other processes 下。组合 PID 与端口时要求同一个进程同时命中。采集权限不足、失败或尚无快照时提示覆盖不完整；无结果仅表示当前采集数据未命中，不表示端口一定空闲。此功能不探测远端服务或额外运行端口扫描。
-- 活跃应用默认每 5 秒采样，顶部间隔菜单可选 1s、2s、5s、10s。修改间隔替换现有定时器，不叠加采样；选项仅在当前面板内保留。移除固定刷新提示和采样状态跳动，采样时间放在悬停提示中。主机内存和 macOS Footprint 最快每 10 秒更新。同机请求合并，最多并发两台机器。应用失活时不启动新命令；关闭后的已发出命令最多等待其 5 秒超时，结果不会写回。
-- CPU 以一个逻辑核心为 100%，可超过 100%。Unix 使用 `ps %CPU`，不代表严格刷新窗口；Windows 使用相邻快照累计 CPU 时间差，首次及过长间隔显示未知。进程数据与 Windows CPU 间隔的有效期取 10 秒和所选间隔加 5 秒中的较大值，容纳 10s 档位的采集耗时。
-- 主内存列、排序和最多 60 点趋势统一使用 Unix RSS 或 Windows Working Set。内存数值提示包含 macOS Footprint 及年龄；终端详情也显示整组 Footprint。Footprint 必须匹配启动身份且不超过 15 秒，整组缺一项就显示未知。RSS/WS 相加可能重复共享页。
-- 主机使用率单独计算，不用受管进程总和冒充主机占用。macOS 可用量来自 `memory_pressure` 系统百分比估计；Linux 使用 MemAvailable，Windows 使用可用物理内存。
-- TCP LISTEN 不是已验证 Web 服务。回环、所有接口、指定地址只说明绑定范围，不说明外部可达性。远端地址始终带机器名，不生成本机 localhost 链接，不请求 HTTP、不转发端口、不打开浏览器。
-
-| 平台适配 | 所需系统工具 | 运行验证 |
+| 平台 | 采集方式 | 验证范围 |
 | --- | --- | --- |
-| macOS | `ps`、`lsof`、`memory_pressure -Q`、`top` | 本机采集与子进程/端口归属已实测 |
-| Linux | `ps`、`ss`、`/proc/meminfo` | 解析回归通过，未做 Linux 端到端验证 |
-| Windows | PowerShell、CIM、`Get-NetTCPConnection` | 解析与 CPU 时间差回归通过，未做 Windows 端到端验证 |
+| macOS | libproc 的子进程查询、pidrusage、原生 FD/socket 信息 | arm64 实机：CPU 忙循环、子进程归属、IPv4/IPv6 监听与持续采样 |
+| Linux | `/proc` 的 stat、meminfo、TCP 表和 FD 链接 | x86_64 交叉编译检查；未做 Linux 运行验收 |
+| Windows | Toolhelp、GetProcessTimes、K32GetProcessMemoryInfo、GetExtendedTcpTable | x86_64 交叉编译检查；未做 Windows 运行验收 |
 
-命令在资源所属机器按现有权限运行，不安装工具、不提权。缺工具、部分可见、失败、过期和离线分别显示；部分可见的监听显示已知端点数，不把它当完整总数。刷新失败时终端旧资源标为 stale，上层不将失败机器旧值计入实时资源。面板不读取 argv、环境变量或终端内容，不持久化资源数据，不提供结束进程按钮，也不能认领已脱离进程树的 daemon 或容器发布端口。
+构建命令只生成当前 OS/架构的 helper。远端机器需自行构建并将 `herdr-resource-sample` 放入其 PATH；未安装时显示明确错误，不退回 `ps`、`top`、`lsof` 或 PowerShell。安装器部署本机 helper 并保留可执行权限，失败回滚同时恢复原文件和权限。生成的二进制与 Cargo target 不入 Git，依赖及图标许可随 Mod 安装。
 
-设计与验收口径见 [资源监控实施方案](docs/resource-monitor-plan.md)。已在独立 app home 中核对原生 Tree 与 600×380 面板的刷新菜单截图；真实鼠标、键盘及滚动交互仍未完成，不能把静态检查或 Node 场景测试视作完整 UI 验收。
+此功能只读，不提权、不读取进程 argv/环境变量或终端内容、不保存采样历史、不请求 HTTP、不转发端口、不结束进程或重启 Core。macOS 不伪造主机可用内存；容器、已脱离受管树的 daemon 与 Desktop/Core 自身没有可靠 PID 绑定时，不虚构资源归属。
+
+本机 1 Hz、9 个受管根的各 30 秒测量中，helper 单核占用约 0.55–0.61%，峰值 RSS 约 1.9 MiB；全机端口搜索期间约 0.93%、3.9 MiB。数据不包含 Herdr IPC、生产 JS 与 GPUI，不能据此认定完整链路已达到 0.5% 目标。原生加载检查与宿主模拟回归通过，隔离应用的原生帧已确认真实采样、footer 与弹层布局；当前桌面权限不足，尚未完成像素级 1:1 和真实鼠标、键盘、滚动验收。契约、性能口径和复现命令见 [资源监控实施方案](docs/resource-monitor-plan.md)。
+
+单终端隔离原生应用的 10 秒短测中，App 与 helper 子进程相对暂停基线的增量约为 0.95% 单核（footer）和 0.89%（显示值稳定的 Resources 弹层）。这已包含实际 JS、exec 与原生绘制，但负载小、时间短，不代表多机器或活跃负载验收。该测量使用原来的内存与终端数 footer；改为直接显示 CPU 后尚未重测。
 
 ## 在新 tab 启动 Agent
 
@@ -243,7 +246,8 @@ Open With 在打开菜单或点击主按钮时固定目标。它从当前终端 
 运行文件生命周期、Agents 标题、Agent Launcher、Open With、Graph 行内展开和资源监控回归检查：
 
 ```sh
-node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/tabs-professional.test.mjs desktop/extensions/oh-my-herdr/agents-professional.test.mjs desktop/extensions/oh-my-herdr/agent-launcher.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs desktop/extensions/oh-my-herdr/git-graph.test.mjs desktop/extensions/oh-my-herdr/resource-monitor.test.mjs
+node desktop/extensions/oh-my-herdr/scripts/build-resource-helper.mjs
+node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/tabs-professional.test.mjs desktop/extensions/oh-my-herdr/agents-professional.test.mjs desktop/extensions/oh-my-herdr/agent-launcher.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs desktop/extensions/oh-my-herdr/git-graph.test.mjs desktop/extensions/oh-my-herdr/resource-monitor.test.mjs desktop/extensions/oh-my-herdr/resource-monitor-view.test.mjs desktop/extensions/oh-my-herdr/resource-native.test.mjs
 ```
 
 在隔离应用目录中安装并运行 `check`。要验证完整界面，还需要用独立的 `HERDR_APP_HOME` 和隔离 Core 会话启动真实应用；仅隔离应用 home 不代表 Core 终端和空间已隔离。
@@ -266,14 +270,13 @@ Git Graph 的上游版权与 MIT 文本随源码保留。Open With 品牌图标�
 
 ### 未发布修改
 
-2026-11-11 Resources 隔离验证：
+2026-11-11 Resources 原生采集改版验证：
 
-- 资源模型、Unix/Windows 解析和安装器共 78 项测试通过。覆盖嵌套根、重复根冲突、跨机器同 PID、逻辑 parent、防环、PID 重用、socket 去重、未知值、stale、Footprint 和趋势上限。
-- `resource-monitor` 初始检查通过；自包含临时原生 fixture 用 50 个终端、500 个进程及两点趋势验证进程行、端口行和 PathBuilder 描述，`professional-status` 检查通过。fixture 不是实际鼠标交互证明。
-- macOS 真实场景通过：父子进程、两个独立监听归属、回环/通配绑定、退出后端点移除；888 条进程的该次快照中主机与 Footprint 可解析。20 次普通采样 p95 为 60 ms；首次 `top` 为 1542 ms，单独统计。Linux/Windows 与远端未做运行验收。
-- 使用独立 app home、Core session 和配置/状态目录安装了测试副本，未部署到日常应用。隔离应用能打开 Resources 且状态无错误，但系统截图工具报告没有活动显示器；应用原生截图仍是旧帧。因此未确认 Resources 的真实显示、鼠标/键盘、主题和窄窗口行为。
-- 可删除的 Node 面板生命周期场景通过：同机请求合并、失活暂停、根 PID 变化和关闭后的迟到结果不回写；重开 20 次后剩余 timer 为 0，关闭后观察 60 秒新增采样为 0。该场景使用测试调度/宿主边界，不代替真实应用交互验收。
-
+- 原生 CPU 忙循环、嵌套根去重、真实 IPv4/IPv6 监听、全机端口搜索和 CLI 输入验证通过；Linux/Windows x86_64 的 Cargo check 通过。
+- 宿主模拟验证单一 1 Hz 调度、未变值免重绘、失活暂停与 CPU 预热、按需监听采集、关闭释放和忽略迟到结果。安装器验证 helper 缺失、执行权限、修复与失败回滚。
+- 130 项 Node 回归、1 项 Cargo 单元测试通过。真实 GPUI 初始加载及强制打开的两页检查通过；隔离应用的原生帧确认了 footer、两页布局、趋势与真实监听端口筛选。首轮未验收点击、键盘和滚动；当时桌面自动化权限不足。采集量级及复现方法见资源监控方案。
+- footer 精简与 Space → Pane 调整后，28 项相关测试通过，覆盖 CPU 单独变化时刷新、无 `≈` 或终端数、多 Tab 下 Pane 平铺及筛选。已热更新日常应用，8 个 Mod 检查通过，应用无加载错误；当前原生帧确认 footer 为 CPU 与内存。新的资源树层级由测试验证，未在真实弹层中展开核对。
+- 新增 Processes 后，33 项相关测试及 8 个 Mod 加载检查通过。隔离 Mod 检查覆盖新增页面与已知、未知、过期进程行。已在真实窗口点击 footer、切换 Processes，确认 Space → Pane 展示及平表四列对齐、实时采样数据；实际筛选输入、排序点击、滚动和键盘仍未验收。
 
 2026-11-10 右上角入口分组验证：
 

@@ -192,13 +192,29 @@
         },
         {
           "id": "status",
-          "type": "block",
-          "content": {
-            "mod": "professional-status",
-            "props": {
-              "graph": { "panel": "graph-panel", "mod": "git-graph" }
+          "type": "row",
+          "children": [
+            {
+              "id": "status-context",
+              "type": "block",
+              "content": {
+                "mod": "professional-status",
+                "props": { "graph": { "panel": "graph-panel", "mod": "git-graph" } }
+              }
+            },
+            {
+              "id": "status-resources",
+              "type": "block",
+              "content": { "mod": "resource-monitor" },
+              "size": { "px": 160 }
+            },
+            {
+              "id": "status-hint",
+              "type": "block",
+              "content": { "mod": "professional-status", "props": { "role": "hint" } },
+              "size": { "px": 130 }
             }
-          },
+          ],
           "size": {
             "px": 28
           }

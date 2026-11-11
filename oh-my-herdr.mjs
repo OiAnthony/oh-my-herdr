@@ -142,7 +142,7 @@ export async function loadBundle(root = ROOT) {
   if (!raw) throw new Error("Missing oh-my-herdr.json");
   const manifest = JSON.parse(raw);
   if (manifest.name !== "oh-my-herdr" || typeof manifest.version !== "string"
-      || manifest.herdrVersion !== "0.1.14" || !Array.isArray(manifest.mods) || !Array.isArray(manifest.layouts)) {
+      || manifest.herdrVersion !== "0.1.15" || !Array.isArray(manifest.mods) || !Array.isArray(manifest.layouts)) {
     throw new Error("Invalid oh-my-herdr manifest");
   }
   const keyBytes = await bytesAt(root, "keybindings.json");
@@ -176,6 +176,12 @@ export async function loadBundle(root = ROOT) {
     mods.add(mod.name);
     await walk(mod.source, `mods/${mod.name}`);
     if (!files.has(`mods/${mod.name}/main.js`)) throw new Error(`Missing mod entry: ${mod.name}`);
+    if (mod.nativeHelper) {
+      const path = `mods/${mod.name}/bin/herdr-resource-sample${process.platform === "win32" ? ".exe" : ""}`;
+      const helper = files.get(path);
+      if (!helper) throw new Error("Missing native resource helper; run node scripts/build-resource-helper.mjs before installing");
+      helper.mode = 0o755;
+    }
   }
   for (const layout of manifest.layouts) {
     if (!LAYOUTS.has(layout.name) || layouts.has(layout.name)
@@ -246,8 +252,12 @@ async function transact(home, operations, beforeCommit, guards = []) {
       const operation = operations[index];
       operation.staged = join(stage, `${index}.new`);
       operation.backup = join(stage, `${index}.old`);
-      if (operation.after !== null) await fs.writeFile(operation.staged, operation.after, { flag: "wx" });
-      if (operation.before !== null) await fs.writeFile(operation.backup, operation.before, { flag: "wx" });
+      if (operation.after !== null) await fs.writeFile(operation.staged, operation.after, { flag: "wx", mode: operation.mode ?? 0o644 });
+      if (operation.before !== null) {
+        const beforeMode = (await fs.stat(await safePath(home, operation.path))).mode & 0o777;
+        await fs.writeFile(operation.backup, operation.before, { flag: "wx", mode: beforeMode });
+        await fs.chmod(operation.backup, beforeMode);
+      }
     }
     // A second full pass detects edits made while staging, before any deployed write.
     for (const operation of [...operations, ...guards]) {
@@ -320,7 +330,9 @@ export async function install(home, { sourceRoot = ROOT, beforeCommit } = {}) {
   }
   for (const [path, file] of bundle.files) {
     const before = snapshots.get(path);
-    if (!before || !before.equals(file.bytes)) operations.push({ path, before, after: file.bytes });
+    const wrongMode = file.mode && before && process.platform !== "win32" &&
+      ((await fs.stat(await safePath(home, path))).mode & 0o100) === 0;
+    if (!before || !before.equals(file.bytes) || wrongMode) operations.push({ path, before, after: file.bytes, mode: file.mode });
   }
   for (const path of Object.keys(record.files)) {
     if (!bundle.files.has(path)) operations.push({ path, before: snapshots.get(path), after: null });
@@ -360,6 +372,9 @@ async function validateDeployment(home, bundle) {
   for (const [path, file] of bundle.files) {
     const bytes = await bytesAt(home, path);
     if (!bytes || !bytes.equals(file.bytes) || record.files[path] !== file.sha256) throw new Error(`Deployment differs from suite: ${path}`);
+    if (file.mode && process.platform !== "win32" && ((await fs.stat(await safePath(home, path))).mode & 0o100) === 0) {
+      throw new Error(`Native helper is not executable: ${path}`);
+    }
   }
   const builtinBytes = await bytesAt(home, "installed.json");
   const builtins = builtinBytes ? JSON.parse(builtinBytes) : {};

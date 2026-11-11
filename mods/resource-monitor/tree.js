@@ -12,11 +12,12 @@ function otherListeners(root, snapshot, port) {
     node.children.forEach(visit);
   };
   visit(root);
-  const table = new Map((snapshot?.processes?.rows ?? []).map(process => [process.pid, process]));
+  const table = new Map((snapshot?.listeners?.processes ?? snapshot?.processes?.rows ?? []).map(process => [process.pid, process]));
   const owners = new Map();
   for (const listener of snapshot?.listeners?.rows ?? []) {
     if (String(listener.port) !== port || managed.has(listener.pid)) continue;
-    const process = table.get(listener.pid);
+    const candidate = table.get(listener.pid);
+    const process = listener.start && candidate?.start === listener.start ? candidate : null;
     let node = owners.get(listener.pid);
     if (!node) {
       const id = JSON.stringify(["port-process", root.machine, listener.pid, process?.start ?? null]);
@@ -29,7 +30,7 @@ function otherListeners(root, snapshot, port) {
       }
       if (!chain.length) chain.push({ pid: listener.pid, ppid: null, name: "Unknown process" });
       node = { id, kind: "process-owner", name: process?.name || "Unknown process", machine: root.machine,
-        pid: listener.pid, children: [], metric: root.metric, at: snapshot?.processes?.at,
+        pid: listener.pid, children: [], metric: root.metric, at: snapshot?.listeners?.at,
         cpu: process?.cpu ?? null, memory: process?.memory ?? null, footprint: null, footprintAt: null,
         unknown: process ? 0 : 1, status: process ? snapshot.processes.state : "partial",
         stale: root.stale || !["ready", "partial"].includes(snapshot?.listeners?.state),
@@ -59,7 +60,8 @@ export function buildResourceTree(nodes, { filters = {}, snapshots = new Map() }
     }
     const node = pane ? { ...source, pane: pane.pane, paneName: pane.name, paneId: pane.id } : source;
     const named = !name || inheritedName || textMatches(node, name);
-    const children = node.children.map(child => project(child, named)).filter(Boolean);
+    const children = node.children.flatMap(child => child.kind === "tab" ? child.children : [child])
+      .map(child => project(child, named)).filter(Boolean);
     if (!filtering) return { ...node, children };
     if (!leaf(node)) return children.length || (named && !pid && !port) ? { ...node, children } : null;
 
@@ -112,4 +114,22 @@ export function resourceRows(tree, { expanded = new Set(), sort = "memory", curr
   }
   for (const node of [...tree].sort(compare)) walk(node, 0);
   return rows;
+}
+
+// Machine summaries already deduplicate nested roots and ambiguous terminal ownership.
+export function processRows(nodes, { filters = {}, sort = "memory" } = {}) {
+  const name = (filters.name ?? "").trim().toLowerCase(), pid = (filters.pid ?? "").trim();
+  const rows = nodes.flatMap(node => {
+    const fresh = !node.stale && ["ready", "partial"].includes(node.processState);
+    return node.processes
+      .filter(process => (!name || [process.name, node.machine].some(value => String(value ?? "").toLowerCase().includes(name)))
+        && (!pid || String(process.pid) === pid))
+      .map(process => ({ id: `process:${process.identity}`,
+        type: "process", node, depth: 0,
+        process: { ...process, cpu: fresh ? process.cpu : null, memory: fresh ? process.memory : null } }));
+  });
+  return rows.sort((a, b) =>
+    (sort === "name" ? (a.process.name ?? "").localeCompare(b.process.name ?? "")
+      : sort === "pid" ? a.process.pid - b.process.pid : (b.process[sort] ?? -1) - (a.process[sort] ?? -1))
+    || (a.process.name ?? "").localeCompare(b.process.name ?? "") || a.id.localeCompare(b.id));
 }

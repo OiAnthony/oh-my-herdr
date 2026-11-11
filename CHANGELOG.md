@@ -4,9 +4,10 @@
 
 - Professional 支持单次 `⌘⇧G` 等待 300ms 后切换 Changes、300ms 内连续两次切换 Git Graph；两种操作均可再次触发以隐藏对应面板。Changes 按可见状态切换，不受终端或面板焦点影响；双次操作保留右侧 Files/Changes 状态。由标签栏统一计时，切换 space、tab 或布局后丢弃待执行操作，Files 快捷键立即执行并取消待处理的 Changes。安装器移除旧原生双次序列，避免叠加宿主固定的 1 秒等待，卸载恢复安装前原值。
 - Agents 列表隐藏 OMP 自动标题中品牌后方的重复状态符号，包含等待、需关注、静态分隔符及四种 spinner；状态保留在 Herdr 行尾。任务 emoji、正文、无品牌标题及手动命名的 tab 保持原样。
-- 新增独立只读 `resource-monitor`：Professional 状态栏 Resources 入口打开浮动面板，展示机器/空间/标签/终端分组、真实子进程树、CPU、RSS/Working Set、macOS Footprint、内存趋势和 TCP 监听端点。嵌套根与共享 socket 去重，未知/部分/过期状态明确标注；应用失活暂停采集，关闭释放调度并忽略迟到结果。提供 macOS/Linux/Windows 采样适配，当前仅 macOS 采集与归属实测，Linux/Windows 及真实 UI 交互未验收。纳入安装器归属，不改上游本体、布局或快捷键，不安装 helper、探测 HTTP 或结束用户进程。
-- Resources 默认以 Tree 展示全部 Spaces，当前 Space 置顶展开，不再提供当前/全部范围开关。承载终端的 Pane 与终端合为一行，统一显示 Pane，不区分 Agent 和 Terminal；保留非终端 Pane、同 tab 无 pane 子终端的逻辑父子关系、OS 资源独立计量与分组去重。顶部刷新间隔可选 1s/2s/5s/10s，默认 5s；压缩工具栏并移除固定刷新提示及采样状态跳动，10s 档位同步调整数据与 Windows CPU 有效期。
-- Resources 新增展开全部、收起全部按钮；搜索拆分为名称/地址、PID 和端口，支持条件组合、进程名搜索及精确 PID/端口匹配。端口结果保留所属 Pane、进程链和监听地址，并覆盖现有快照中未归属 Pane 的监听进程；采集覆盖不完整时显示提示。
+- Resources 改为 footer 实时 CPU、内存与原生弹层，共享一套 1 Hz 采样；footer 不显示 `≈` 和终端数。沿用 Orca 的 416 px 弹层、Resources / PTYs 页签与紧凑表格，资源树按 Space → Pane 展示，省略 Tab 层；保留排序、子进程树、趋势和组合搜索，未知及覆盖不完整单独标注。应用失活暂停，显示值不变时减少 footer 与弹层重绘。
+- Resource Manager 新增 Processes 页，将受管终端及子进程铺平成 Name / PID / CPU / Memory 明细表，支持名称或机器名、精确 PID 筛选与列排序；共享现有快照，不新增采样或端口扫描。
+- 新增 Rust helper：macOS 按受管根查询后代并读取 footprint/RSS 与累计 CPU；Linux 使用 procfs，Windows 使用原生进程和 TCP API。监听默认只查受管进程，打开 PTYs 页后每 5 秒采集；输入端口筛选时才补充全机监听。PID 复用、超时和迟到结果不污染当前数据，不回退重型系统命令。
+- 安装器支持本机 helper 的构建前检查、可执行权限和失败回滚；目标 Desktop 版本更新为 0.1.15。原生源码与依赖锁入库，二进制按目标平台构建，许可随 Mod 安装。本机采集及 Linux/Windows 交叉编译检查通过；完整界面与全链路性能仍待验收。
 - 新增 `⌘⇧E` 聚焦 Files、`⌘⇧G` 切换 Changes；Files 已聚焦时再次按下隐藏，可见但未聚焦时只聚焦。Changes 按可见状态切换，隐藏后返回当前 pane。新增 `professional-panels` 布局适配器，保留内置 0.1.14 面板源码和原生子控件，内置模块不变；纳入安装归属和快捷键恢复。
 - Professional 右上角改为 Files、Changes、`+`、Open With 的顺序，将两个启动入口相邻放置；保留独立菜单、默认项和快捷键行为，并同步布局预览图。
 - Professional 新增基于内置 Agents 0.1.14 的 `agents-professional` 副本；OMP 配有图标时只移除自动标题的前导品牌 `π`，保留状态符号、任务 emoji、正文和手动命名的 tab。内置 Agents 不变，副本及布局引用纳入套件安装归属。

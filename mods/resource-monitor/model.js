@@ -16,7 +16,7 @@ export function binding(address) {
 function portsFor(rows, machine, pids) {
   const result = new Map();
   for (const row of rows) {
-    if (!pids.has(row.pid)) continue;
+    if (!row.start || row.start !== pids.get(row.pid)) continue;
     // A socket id proves sharing only within the same concrete endpoint.
     const endpoint = [machine, row.family, row.protocol, row.address, row.port];
     const id = key(...endpoint, row.socket ? ["socket", row.socket] : ["pid", row.pid]);
@@ -49,7 +49,7 @@ export function buildResources({ terminals = [], spaces = [], panes = [], agents
     const id = machine ?? "";
     if (machines.has(id)) return machines.get(id);
     const snapshot = snapshots.get(id);
-    const metric = snapshot?.platform === "windows" ? "Working Set" : "RSS";
+    const metric = snapshot?.processes?.metric ?? (snapshot?.platform === "windows" ? "Working Set" : "RSS");
     const node = base("machine", key("machine", machine), machine ?? "Local", machine, metric, snapshot?.processes?.at ?? null);
     node.snapshot = snapshot ?? null;
     node.host = snapshot?.host ?? null;
@@ -203,7 +203,7 @@ export function buildResources({ terminals = [], spaces = [], panes = [], agents
     function metrics(node) {
       node.cpu = sum(node.processes, "cpu");
       node.memory = sum(node.processes, "memory");
-      node.ports = portsFor(listeners, root.machine, new Set(node.processes.filter(p => p.start).map(p => p.pid)));
+      node.ports = portsFor(listeners, root.machine, new Map(node.processes.filter(p => p.start).map(p => [p.pid, p.start])));
       node.portsState = snapshot?.listeners?.state ?? "loading";
       node.portsAt = snapshot?.listeners?.at ?? null;
       node.portCount = node.portsState === "ready" ? node.ports.length : null;

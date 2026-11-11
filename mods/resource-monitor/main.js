@@ -1,33 +1,33 @@
 import { View, div, svg, PathBuilder } from "gpui-kit";
-import { Button, Input, InputState, Popover, Scrollbar, VirtualListScrollHandle, h_flex, v_flex, v_virtual_list } from "gpui-base";
-import { agents, closeOverlay, exec, focused, machines, panes, props, spaces, terminals, theme, window as appWindow } from "herdr";
+import { Button, Input, InputState, Popover, Scrollbar, Tab, Tabs, VirtualListScrollHandle, h_flex, v_flex, v_virtual_list } from "gpui-base";
+import { agents, appHome, exec, focused, machines, panes, props, spaces, terminals, theme, window as appWindow } from "herdr";
 import { createCollector } from "./collect.js";
 import { buildResources, MemoryHistory } from "./model.js";
-import { buildResourceTree, resourceRows } from "./tree.js";
+import { buildResourceTree, processRows, resourceRows } from "./tree.js";
 
-const ROW = 32;
+const ROW = 28;
 const LIST = "resource-monitor-rows";
-const INTERVALS = [1, 2, 5, 10];
 const icon = name => svg(`mods/workspace-chrome/${name}.svg`).size(13).flex_none();
 const machineOf = terminal => terminal.machine ?? (terminal.address?.includes("/") ? terminal.address.slice(0, terminal.address.indexOf("/")) : null);
 const bytes = value => {
-  if (!Number.isFinite(value)) return "Unknown";
-  for (const [scale, unit] of [[1024 ** 3, "GiB"], [1024 ** 2, "MiB"], [1024, "KiB"]]) {
-    if (value >= scale) return `${(value / scale).toFixed(1)} ${unit}`;
-  }
-  return `${Math.round(value)} B`;
+  if (!Number.isFinite(value)) return "—";
+  if (value < 1024 ** 2) return `${Math.round(value / 1024)} KB`;
+  if (value < 1024 ** 3) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+  return `${(value / 1024 ** 3).toFixed(2)} GB`;
 };
-const cpu = value => Number.isFinite(value) ? `${value.toFixed(1)}%` : "Unknown";
+const cpu = value => Number.isFinite(value) ? `${value.toFixed(1)}%` : "—";
 const age = (at, now) => at ? `${Math.max(0, Math.floor((now - at) / 1000))}s ago` : "Not sampled";
 const endpoint = port => `${port.family === "ipv6" ? `[${port.address}]` : port.address}:${port.port}`;
 const clean = text => String(text ?? "").replace(/[\u0000-\u001f\u007f]/g, " ");
 
 export default class ResourceMonitor extends View {
   init(_props, cx) {
-    this.overlay = props()?.overlay;
+    this.open = Boolean(props()?.open);
+    this.hovered = false;
+    this.tab = "resources";
     this.closed = false;
     this.generation = 0;
-    this.collector = createCollector(exec);
+    this.collector = createCollector(exec, platform => `${appHome()}/mods/resource-monitor/bin/herdr-resource-sample${platform === "windows" ? ".exe" : ""}`);
     this.snapshots = new Map();
     this.inflight = new Map();
     this.connections = new Map();
@@ -37,8 +37,8 @@ export default class ResourceMonitor extends View {
     this.nodes = [];
     this.rows = [];
     this.sort = "memory";
-    this.interval = 5;
-    this.intervalOpen = false;
+    this.portsAt = new Map();
+    this.wasActive = Boolean(appWindow()?.active);
     this.selected = null;
     this.revealSearch = false;
     this.now = Date.now();
@@ -47,29 +47,35 @@ export default class ResourceMonitor extends View {
     this.handle = cx.focus_handle();
     this.scroll = VirtualListScrollHandle.new();
     this.filters = {
-      name: InputState.new({ placeholder: "Name / address" }),
+      name: InputState.new({ placeholder: "Name" }),
       pid: InputState.new({ placeholder: "PID" }),
       port: InputState.new({ placeholder: "Port" })
     };
     for (const [name, input] of Object.entries(this.filters)) {
-      input.on("change", (_e, cx) => { this.flatten(true); cx.notify(); });
+      input.on("change", (_e, cx) => {
+        this.flatten(true);
+        if (name === "port") this.portsAt.clear();
+        cx.notify();
+      });
       input.on("focus", () => { this.focusedInputs.add(name); });
       input.on("blur", () => { this.focusedInputs.delete(name); });
     }
     this.currentSpace = focused()?.space ?? spaces().find(s => s.active)?.id ?? null;
-    this.handle.focus();
     this.refresh(cx);
     this.schedule(cx);
   }
 
   schedule(cx) {
     this.timer?.cancel();
-    this.timer = cx.timer.every(this.interval * 1000, cx => {
+    this.timer = cx.timer.every(1000, cx => {
       if (this.closed) return;
+      if (!appWindow()?.active) {
+        if (this.wasActive) { this.wasActive = false; this.collector.clear(); this.portsAt.clear(); }
+        return;
+      }
+      this.wasActive = true;
       this.now = Date.now();
-      this.dirty = true;
       this.refresh(cx);
-      cx.notify();
     });
   }
 
@@ -96,8 +102,10 @@ export default class ResourceMonitor extends View {
     const spaceChanged = currentSpace !== this.currentSpace;
     this.currentSpace = currentSpace;
     this.dirty = false;
-    this.nodes = buildResources({ terminals: ts, spaces: ss, panes: ps, agents: as, snapshots: this.snapshots, now: this.now, maxSampleAge: Math.max(10000, (this.interval + 5) * 1000) });
+    this.nodes = buildResources({ terminals: ts, spaces: ss, panes: ps, agents: as, snapshots: this.snapshots, now: this.now, maxSampleAge: 3000 });
+    const present = new Set();
     const visit = node => {
+      present.add(node.id);
       if (!this.seen.has(node.id)) {
         this.seen.add(node.id);
         if (node.space === this.currentSpace && node.kind !== "terminal") this.expanded.add(node.id);
@@ -106,12 +114,14 @@ export default class ResourceMonitor extends View {
       for (const child of node.children ?? []) visit(child);
     };
     this.nodes.forEach(visit);
+    for (const id of this.seen) if (!present.has(id)) { this.seen.delete(id); this.expanded.delete(id); }
     this.history.update(this.nodes, this.now);
     this.flatten();
   }
 
   refresh(cx) {
     if (this.closed) return;
+    const before = this.footerSignature();
     const available = new Map(machines().map(m => [m.name ?? "", m.layout]));
     const targets = new Map();
     this.rebuild();
@@ -122,6 +132,7 @@ export default class ResourceMonitor extends View {
     }
     for (const key of this.connections.keys()) if (!targets.has(key)) {
       this.connections.delete(key);
+      this.portsAt.delete(key);
       this.collector.forget(key || null);
     }
     for (const [key] of targets) {
@@ -151,6 +162,7 @@ export default class ResourceMonitor extends View {
       }
     }
     this.rebuild();
+    if (before !== this.footerSignature()) cx.notify();
     if (!appWindow()?.active) return;
     const candidates = [...targets].filter(([key]) => available.get(key) !== "unavailable" && !this.inflight.has(key))
       .sort(([a], [b]) => (this.snapshots.get(a)?.at ?? 0) - (this.snapshots.get(b)?.at ?? 0));
@@ -158,10 +170,13 @@ export default class ResourceMonitor extends View {
       const generation = this.generation;
       const connection = this.connections.get(key);
       const token = {};
+      const roots = terminals().filter(t => t.state === "live" && (machineOf(t) ?? "") === key).map(t => t.pid);
+      const ports = this.open && this.tab === "terminals" && Date.now() - (this.portsAt.get(key) ?? 0) >= 5000;
+      if (ports) this.portsAt.set(key, Date.now());
       this.inflight.set(key, token);
       cx.spawn(async cx => {
         let snapshot;
-        try { snapshot = await this.collector.sample(machine, machine === null ? appWindow()?.platform : null, Math.max(10000, (this.interval + 5) * 1000)); }
+        try { snapshot = await this.collector.sample(machine, { platform: machine === null ? appWindow()?.platform : null, roots, ports, allPorts: this.portSearch }); }
         catch {
           const old = this.snapshots.get(key);
           snapshot = {
@@ -173,6 +188,7 @@ export default class ResourceMonitor extends View {
         }
         if (this.closed || generation !== this.generation || this.inflight.get(key) !== token) return;
         this.inflight.delete(key);
+        if (!snapshot) return;
         if (this.connections.get(key) !== connection) return;
         // A disconnected/removed target cannot receive a late success from its old connection.
         if (machines().some(m => (m.name ?? "") === key && m.layout === "unavailable") ||
@@ -183,11 +199,13 @@ export default class ResourceMonitor extends View {
             snapshot[name] = { ...previous[name], state: snapshot[name].state, message: snapshot[name].message };
           }
         }
+        const before = this.footerSignature(), panelBefore = this.panelSnapshot ?? null;
         this.snapshots.set(key, snapshot);
         this.now = Date.now();
         this.dirty = true;
         this.rebuild();
-        cx.notify();
+        this.panelSnapshot = this.panelSignature();
+        if (this.hovered || before !== this.footerSignature() || panelBefore !== this.panelSnapshot) cx.notify();
       });
     }
   }
@@ -195,24 +213,16 @@ export default class ResourceMonitor extends View {
   flatten(reveal = false) {
     const filters = Object.fromEntries(Object.entries(this.filters).map(([name, input]) => [name, input.value().trim()]));
     this.searching = Object.values(filters).some(Boolean);
-    this.portSearch = Boolean(filters.port);
+    this.portSearch = this.tab === "terminals" && Boolean(filters.port);
     if (reveal) this.revealSearch = this.searching;
-    this.tree = buildResourceTree(this.nodes, { filters, snapshots: this.snapshots });
-    if (reveal || (this.searching && this.revealSearch)) {
+    this.tree = this.tab === "processes" ? [] : buildResourceTree(this.nodes, { filters, snapshots: this.snapshots });
+    if (this.tab !== "processes" && (reveal || (this.searching && this.revealSearch))) {
       const visit = node => { this.expanded.add(node.id); node.children.forEach(visit); };
       this.tree.forEach(visit);
     }
-    this.rows = resourceRows(this.tree, { expanded: this.expanded, sort: this.sort, currentSpace: this.currentSpace });
+    this.rows = this.tab === "processes" ? processRows(this.nodes, { filters, sort: this.sort })
+      : resourceRows(this.tree, { expanded: this.expanded, sort: this.sort, currentSpace: this.currentSpace });
     if (!this.rows.some(row => row.id === this.selected)) this.selected = this.rows[0]?.id ?? null;
-  }
-
-  expandAll(open, cx) {
-    this.revealSearch = false;
-    this.expanded.clear();
-    this.flatten(open);
-    this.handle.focus();
-    if (this.rows.length) this.scroll.scroll_to_item(0);
-    cx.notify();
   }
 
   activate(id, cx) {
@@ -231,12 +241,11 @@ export default class ResourceMonitor extends View {
 
   key(event, cx) {
     if (event.key === "escape") {
-      if (this.intervalOpen) { this.intervalOpen = false; cx.notify(); }
-      else closeOverlay(this.overlay);
+      this.open = false;
+      cx.notify();
       cx.stop_propagation();
       return;
     }
-    if (this.intervalOpen) return;
     if (this.focusedInputs.size || event.modifiers.control || event.modifiers.platform || event.modifiers.alt) return;
     const index = this.rows.findIndex(row => row.id === this.selected);
     if (event.key === "down" || event.key === "up") {
@@ -258,141 +267,183 @@ export default class ResourceMonitor extends View {
     cx.notify();
   }
 
-  button(id, label, action, active = false) {
+  button(id, label, action) {
     const t = theme();
-    return Button.new(id).h(28).px(8).flex_none().rounded(5).border_1().border_color(active ? t.accent : t.border)
-      .bg(active ? t.selected : t.raised).text_color(t.foreground).text_size(12).tab_index(0)
+    return Button.new(id).h(24).px(6).flex_none().rounded(4)
+      .text_color(t.muted).text_size(11).tab_index(0)
       .accessibility_label(label).hover(el => el.bg(t.hover)).on_mouse_down("left", (_e, cx) => cx.stop_propagation())
       .when(Boolean(action), el => el.on_click(action)).child(label);
   }
 
-  intervalControl(t) {
-    return Popover.new("resource-interval").open(this.intervalOpen)
-      .on_open_change((open, cx) => { this.intervalOpen = open; cx.notify(); })
-      .trigger(this.button("resource-interval-trigger", `${this.interval}s ▾`, null)
-        .accessibility_label(`Refresh interval: ${this.interval} seconds`).tooltip("Refresh interval"))
-      .when(this.intervalOpen, el => el.content(v_flex().p(4).gap(3).rounded(5).bg(t.popover).border_1().border_color(t.border)
-        .children(INTERVALS.map(seconds => this.button(`resource-interval-${seconds}`, `${seconds}s`, (_e, cx) => {
-          this.interval = seconds;
-          this.intervalOpen = false;
-          this.schedule(cx);
-          cx.notify();
-        }, this.interval === seconds)))));
-  }
-
   spark(node, t) {
     const samples = this.history.get(node);
-    if (samples.length < 2) return div().w(64).flex_none().text_right().text_color(t.muted).child("No trend");
+    if (samples.length < 2) return div().w(48).flex_none().text_right().text_color(t.muted).tooltip("Not enough samples").child("—");
     const min = Math.min(...samples), span = Math.max(...samples) - min || 1;
     const path = PathBuilder.stroke(1.3);
     samples.forEach((value, i) => {
       const x = `${i * 100 / (samples.length - 1)}%`, y = `${95 - (value - min) * 90 / span}%`;
       if (i) path.line_to(x, y); else path.move_to(x, y);
     });
-    return div().w(64).h(18).flex_none().child(globalThis.window.paint_path(path.build(), t.accent).size_full());
+    return div().w(48).h(14).flex_none().child(globalThis.window.paint_path(path.build(), t.accent).size_full());
   }
 
   row(row, t) {
     const { node, type } = row;
-    const base = h_flex().h(ROW).w_full().px(12).gap(12).items_center().text_size(12)
+    const base = h_flex().h(ROW).w_full().px(12).gap(8).items_center().text_size(11)
       .when(row.id === this.selected, el => el.bg(t.selected)).hover(el => el.bg(t.hover));
-    const name = div().flex_1().min_w(200).pl(row.depth * 14).truncate();
+    const name = div().flex_1().min_w(0).pl(Math.min(row.depth, 6) * 10).truncate();
     const value = (text, width) => div().w(width).flex_none().text_right().child(text);
     if (type === "port") return base.text_color(t.muted)
-      .child(name.child(`${node.machine ?? "This computer"}  ${endpoint(row.port)}`))
-      .child(div().flex_none().text_color(t.foreground).tooltip(age(node.portsAt, this.now)).child(`TCP LISTEN · ${row.port.binding ?? "specific address"}`));
+      .child(name.tooltip(`${node.machine ?? "This computer"} · ${endpoint(row.port)} · TCP LISTEN`).child(endpoint(row.port)))
+      .child(div().flex_none().child("TCP LISTEN"));
     if (type === "detail") {
-      const snapshot = this.snapshots.get(node.machine ?? "");
-      const ports = snapshot?.listeners;
-      const detail = [node.directChildren === null ? "Child counts unknown" : `${node.directChildren} direct children; ${node.descendants} descendants`,
-        Number.isFinite(node.footprint) ? `Footprint ${bytes(node.footprint)} (${age(node.footprintAt, this.now)})` : (snapshot?.platform === "macos" ? "Footprint unknown" : null),
-        ports?.state === "ready" ? (node.ports.length ? null : "No TCP listeners found") : (ports?.message ?? "Listener coverage unknown"),
+      const ports = this.snapshots.get(node.machine ?? "")?.listeners;
+      const detail = [node.directChildren === null ? "Child counts unknown" : `${node.directChildren} children · ${node.descendants} descendants`,
+        this.tab === "terminals" ? (ports?.state === "ready" ? `${node.ports.length} listeners` : ports?.message) : null,
         node.message].filter(Boolean).join(" · ");
       return base.text_color(t.muted).child(name.tooltip(clean(detail)).child(clean(detail)));
     }
     if (type === "process") {
       const process = row.process;
+      const flat = this.tab === "processes";
+      const title = `${flat && node.machine ? `${clean(node.machine)} / ` : ""}${clean(process.name)}`;
       return base.text_color(t.muted)
-        .child(name.tooltip(`PID ${process.pid} · PPID ${process.ppid}${process.start ? ` · Started ${process.start}` : " · Start time unknown"}`)
-          .child(`${clean(process.name)}  ${process.pid} / ${process.ppid}${process.root ? " · root" : ""}${process.foreground ? " · foreground" : ""}`))
-        .child(value(cpu(process.cpu), 78)).child(value(bytes(process.memory), 106)
-          .tooltip(`Footprint: ${bytes(process.footprint)} · ${age(process.footprintAt, this.now)}`))
-        .child(value("", 78)).child(value("", 72)).child(value("", 64));
+        .child(name.tooltip(`${node.machine ?? "This computer"} · ${clean(process.name)} · PID ${process.pid} · PPID ${process.ppid} · ${process.start ?? "Start unknown"}${node.message ? ` · ${clean(node.message)}` : ""}`)
+          .child(flat ? `${title}${node.stale ? " · stale" : ""}` : `${title} · ${process.pid}`))
+        .when(flat, el => el.child(value(String(process.pid), 44)))
+        .child(value(cpu(process.cpu), 52)).child(value(bytes(process.memory), 76)
+          .tooltip(`${node.metric} · RSS ${bytes(process.resident)} · ${age(node.at, this.now)}`));
     }
-    const snapshot = this.snapshots.get(node.machine ?? "");
-    const fresh = snapshot?.processes.state === "ready" || snapshot?.processes.state === "partial";
-    const warning = node.unknown ? ` · ${node.unknown} unknown` : "";
-    const kind = node.kind === "terminal" ? "Pane" : node.kind === "process-owner" ? "Process" : node.kind[0].toUpperCase() + node.kind.slice(1);
-    const title = `${node.kind === "space" && node.machine ? `${clean(node.machine)} / ` : ""}${clean(node.name)}${warning}${node.stale ? " · stale" : ""}`;
+    const fresh = !node.stale && ["ready", "partial"].includes(node.processState);
+    const title = `${node.kind === "space" && node.machine ? `${clean(node.machine)} / ` : ""}${clean(node.name)}${node.stale ? " · stale" : ""}`;
     return base.cursor_pointer()
-      .child(h_flex().flex_1().min_w(200).pl(row.depth * 14).gap(6).items_center()
+      .child(h_flex().flex_1().min_w(0).pl(Math.min(row.depth, 6) * 10).gap(4).items_center()
         .child(icon(this.expanded.has(node.id) ? "chevron-down" : "chevron-right").text_color(t.muted))
-        .child(div().flex_none().text_size(10).text_color(t.muted).child(kind))
-        .child(div().min_w(0).truncate().tooltip(`${title}${node.pane ? ` · Pane: ${clean(node.paneName ?? node.name)} (${node.pane})` : ""}${node.address ? ` · ${node.address}` : ""}${node.parent ? ` · Core parent: ${node.parent}` : ""}${node.message ? ` · ${clean(node.message)}` : ""}`).child(title))
-        .when(Boolean(node.status), el => el.child(div().flex_none().text_size(10).text_color(t.muted).child(clean(node.status)))))
-      .child(value(cpu(node.cpu), 78).text_color(fresh ? t.foreground : t.muted))
-      .child(value(bytes(node.memory), 106).text_color(fresh ? t.foreground : t.muted)
-        .tooltip(`${node.metric} · Footprint: ${bytes(node.footprint)} · ${age(node.footprintAt, this.now)}`))
-      .child(value(node.kind === "terminal" ? (node.descendants ?? "Unknown").toString() : "", 78))
-      .child(value(snapshot?.listeners.state === "ready" ? String(node.ports.length) : `${node.ports.length} known`, 72))
-      .child(this.spark(node, t));
+        .child(div().min_w(0).truncate().tooltip(`${title}${node.address ? ` · ${node.address}` : ""}${node.message ? ` · ${clean(node.message)}` : ""}`).child(title)))
+      .child(value(cpu(fresh ? node.cpu : null), 52).text_color(t.muted))
+      .child(value(bytes(fresh ? node.memory : null), 76).text_color(t.muted)
+        .tooltip(`${node.metric}${node.unknown ? " · Known subtotal; coverage incomplete" : ""} · ${age(node.at, this.now)}`));
   }
 
-  render(cx) {
-    this.rebuild();
-    const t = theme();
-    const paused = !appWindow()?.active;
-    const hostRows = this.nodes.map(node => {
-      const snapshot = this.snapshots.get(node.machine ?? ""), host = snapshot?.host;
-      const known = host?.state === "ready" && host.total > 0 && Number.isFinite(host.available);
-      const text = known ? `${((host.total - host.available) * 100 / host.total).toFixed(1)}% host memory · ${bytes(host.available)} available` : (host?.message ?? "Host memory unknown");
-      const resourceState = snapshot?.processes;
-      return div().min_w(0).truncate().text_size(11.5).text_color(t.muted)
-        .tooltip(`${clean(node.name)} · ${text} · ${age(host?.at, this.now)}${resourceState?.message ? ` · ${clean(resourceState.message)}` : ""}`)
-        .child(`${clean(node.name)}: ${text}${resourceState?.state === "error" ? " · stale" : ""}`);
-    });
-    const list = v_flex().flex_1().min_h(0).min_w(0).relative()
+  summary() {
+    const active = spaces().find(s => s.id === this.currentSpace) ?? spaces().find(s => s.active);
+    const machine = active?.machine ?? null;
+    const root = this.nodes.find(n => n.machine === machine);
+    const count = terminals().filter(t => t.state === "live" && machineOf(t) === machine).length;
+    const fresh = root && !root.stale && this.now - root.at <= 3000 && ["ready", "partial"].includes(root.processState);
+    return { root, machine, memory: count === 0 ? 0 : fresh ? root.memory : null,
+      cpu: count === 0 ? 0 : fresh && this.wasActive ? root.cpu : null, count };
+  }
+
+  footerSignature() {
+    const s = this.summary();
+    return JSON.stringify([s.machine, cpu(s.cpu), bytes(s.memory), Boolean(s.root?.unknown), s.root?.message]);
+  }
+
+  panelSignature() {
+    if (!this.open) return null;
+    const s = this.summary();
+    // Sample timestamps advance every second; compare what the panel actually shows.
+    return JSON.stringify([
+      s.machine, s.count, cpu(s.cpu), bytes(s.memory), s.root?.metric, s.root?.unknown, s.root?.message,
+      age(s.root?.at, this.now),
+      this.rows.map(row => {
+        const n = row.node, p = row.process;
+        return [row.id, row.type, row.depth, n.name, n.address, n.metric, n.stale, n.processState, n.unknown, n.message,
+          cpu(n.cpu), bytes(n.memory), age(n.at, this.now), n.directChildren, n.descendants,
+          p && [p.pid, p.ppid, p.start, p.name, cpu(p.cpu), bytes(p.memory), bytes(p.resident)],
+          row.port && endpoint(row.port)];
+      }),
+      this.tab === "terminals" && [
+        s.root && this.history.get(s.root),
+        [...this.snapshots.values()].map(s => [s.listeners?.state, s.listeners?.scope, s.listeners?.message])
+      ]
+    ]);
+  }
+
+  panel(cx) {
+    const t = theme(), summary = this.summary();
+    const tab = (id, label) => Tab.new(`resource-tab-${id}`).selected(this.tab === id)
+      .h(28).px(8).text_size(11).border_b(2).border_color(this.tab === id ? t.accent : t.popover)
+      .text_color(this.tab === id ? t.foreground : t.muted).hover(el => el.text_color(t.foreground))
+      .on_click((_e, cx) => {
+        this.tab = id; this.portsAt.clear();
+        if (id !== "processes" && this.sort === "pid") this.sort = "memory";
+        for (const input of Object.values(this.filters)) input.set_value("");
+        this.flatten();
+        if (id !== "processes") this.refresh(cx);
+        cx.notify();
+      }).child(h_flex().gap(6).items_center()
+        .child(svg(`mods/resource-monitor/${id === "terminals" ? "terminal" : "activity"}.svg`).size(12))
+        .child(label).when(id === "terminals", el => el.child(div().px(4).rounded(4).bg(t.selected).text_size(10).child(String(summary.count)))));
+    const list = v_flex().flex_1().min_h(0).relative()
       .child(v_virtual_list(LIST, this.rows.length, ROW, index => this.rows[index].id,
         range => this.rows.slice(range.start, range.end).map(row => this.row(row, t)))
         .size_full().track_scroll(this.scroll).on_item_click((id, cx) => this.activate(id, cx)))
       .child(Scrollbar.vertical(LIST).viewport_from_layout().absolute().inset_0());
-    return v_flex().id("resource-monitor").track_focus(this.handle).size_full().min_w(0).min_h(0)
-      .bg(t.popover).text_color(t.foreground).text_size(12.5).role("group").accessibility_label("Resources: child processes and listening ports")
+    return v_flex().id("resource-manager").w(416).max_w("95%").h(640).max_h("85%")
+      .track_focus(this.handle).bg(t.popover).text_color(t.foreground).text_size(11).rounded(8)
+      .border_1().border_color(t.border).overflow_hidden().role("group").accessibility_label("Resource Manager")
       .on_key_down((e, cx) => this.key(e, cx))
-      .child(h_flex().px(12).h(38).flex_none().gap(6).items_center()
-        .child(div().flex_1().min_w(0).font_semibold().text_size(13).tooltip("Tree · Read-only resource monitor").child("Resources · Tree"))
-        .child(this.button("resource-expand-all", "Expand all", (_e, cx) => this.expandAll(true, cx)))
-        .child(this.button("resource-collapse-all", "Collapse all", (_e, cx) => this.expandAll(false, cx)))
-        .child(this.intervalControl(t))
-        .child(this.button("resource-refresh", "Refresh", (_e, cx) => { this.refresh(cx); cx.notify(); })
-          .tooltip(paused ? "Sampling is paused while the app is inactive" : "Refresh resources now"))
-        .child(this.button("resource-close", "Close", () => closeOverlay(this.overlay))))
-      .child(h_flex().px(12).pb(6).gap(6).items_center().flex_none().on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-        .children(Object.entries(this.filters).map(([name, input]) =>
-          div().when(name === "name", el => el.flex_1().min_w(80))
-            .when(name !== "name", el => el.w(64).flex_none())
-            .tooltip(name === "name" ? "Pane, process, space or tab name; pane ID or terminal address" : name === "pid" ? "Exact PID; combined with other filters" : "Exact TCP listening port; includes collected processes outside panes")
-            .child(Input.new(input).w_full().h(28).px(8).rounded(5).border_1().border_color(t.input).bg(t.background).text_color(t.foreground)
-              .accessibility_label(name === "name" ? "Filter names or addresses" : name === "pid" ? "Filter exact process ID" : "Filter exact TCP listening port"))))
-        .children(["name", "cpu", "memory"].map(sort => this.button(`resource-sort-${sort}`, sort === "cpu" ? "CPU" : sort === "name" ? "Name" : "Memory", (_e, cx) => {
-          this.sort = sort; this.flatten(); cx.notify();
-        }, this.sort === sort).tooltip(`Sort by ${sort}`))))
-      .child(v_flex().px(12).pb(6).gap(3).flex_none().children(hostRows))
-      .when(this.portSearch, el => el.child(div().px(12).pb(6).text_size(11).text_color(t.muted)
-        .child(`Port search · Collected TCP listeners${[...this.snapshots.values()].some(snapshot => snapshot.listeners?.state !== "ready") || !this.snapshots.size ? " · Coverage incomplete or unavailable" : ""}`)))
-      .child(div().id("resource-horizontal").flex_1().min_h(0).min_w(0).overflow_x_scrollbar()
-        .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-        .child(v_flex().min_w(800).w_full().h_full()
-          .child(h_flex().h(30).flex_none().px(12).gap(12).items_center().bg(t.chrome).text_color(t.muted).text_size(11)
-            .child(div().flex_1().min_w(200).child("Name / PID / PPID"))
-            .child(div().w(78).flex_none().text_right().tooltip("Percent of one core; may exceed 100%. Unix ps CPU is not a fixed sampling window.").child("CPU / core"))
-            .child(div().w(106).flex_none().text_right().tooltip("RSS on Unix; Working Set on Windows. Summed shared pages can repeat.").child("RSS / WS"))
-            .child(div().w(78).flex_none().text_right().child("Descendants"))
-            .child(div().w(72).flex_none().text_right().child("Listeners"))
-            .child(div().w(64).flex_none().text_right().child("Memory")))
-          .when(this.rows.length > 0, el => el.child(list))
-          .when(!this.rows.length, el => el.child(div().p(24).text_color(t.muted).child(this.searching ? "No matching resources in collected data" : "No running panes in this scope")))))
-      .child(div().px(12).py(4).flex_none().text_size(11).text_color(t.muted)
-        .child("Read-only · Listening ports are not verified web services · Shared pages may repeat in RSS/WS"));
+      .child(h_flex().px(12).h(32).flex_none().gap(6).items_center().border_b(1).border_color(t.border)
+        .child(svg("mods/resource-monitor/memory.svg").size(12).text_color(t.muted))
+        .child(div().flex_1().font_medium().child("Resource Manager"))
+        .child(this.button("resource-refresh", "Refresh", (_e, cx) => { this.portsAt.clear(); this.refresh(cx); }))
+        .child(this.button("resource-close", "Close", (_e, cx) => { this.open = false; cx.notify(); })))
+      .child(Tabs.new("resource-tabs").flex().flex_row().px(12).py(4).gap(4).flex_none()
+        .child(tab("resources", "Resources")).child(tab("terminals", "PTYs")).child(tab("processes", "Processes")))
+      .child(v_flex().px(12).py(8).gap(4).border_b(1).border_color(t.border).flex_none()
+        .child(h_flex().gap(12).items_center().child(cpu(summary.cpu)).child(`${bytes(summary.memory)} ${summary.root?.metric ?? "memory"}`)
+          .when(this.tab === "terminals" && Boolean(summary.root), el => el.child(this.spark(summary.root, t))))
+        .child(div().text_color(t.muted).tooltip("Combined process load; 100% equals one CPU core. Sampling pauses when the app is inactive.")
+          .child(`${summary.machine ?? "This computer"} · ${summary.root?.unknown ? "Known subtotal · " : ""}${age(summary.root?.at, this.now)}`)))
+      .when(this.tab !== "resources", el => el.child(h_flex().px(12).py(6).gap(4).flex_none()
+        .children(Object.entries(this.filters).filter(([name]) => this.tab === "terminals" || name !== "port")
+          .map(([name, input]) => div().when(name === "name", el => el.flex_1().min_w(0))
+          .when(name !== "name", el => el.w(64).flex_none())
+          .child(Input.new(input).w_full().h(26).px(6).rounded(4).border_1().border_color(t.input).bg(t.background)
+            .accessibility_label(name === "name" ? (this.tab === "processes" ? "Filter process names or machines" : "Filter names or addresses")
+              : name === "pid" ? "Filter exact process ID" : "Filter exact TCP listening port"))))))
+      .child(h_flex().px(12).h(26).gap(8).items_center().bg(t.chrome).border_b(1).border_color(t.border).flex_none()
+        .children([["name", "Name", null], ...(this.tab === "processes" ? [["pid", "PID", 44]] : []),
+          ["cpu", "CPU", 52], ["memory", "Memory", 76]].map(([id, label, width]) =>
+          Button.new(`resource-sort-${id}`).h(24).text_size(10).text_color(this.sort === id ? t.foreground : t.muted)
+            .px(0).when(width !== null, el => el.w(width).flex_none().justify_end().text_right())
+            .when(width === null, el => el.flex_1().min_w(0).justify_start().text_left())
+            .tab_index(0).accessibility_label(`Sort by ${label}`).on_click((_e, cx) => { this.sort = id; this.flatten(); cx.notify(); }).child(label))))
+      .when(this.rows.length > 0, el => el.child(list))
+      .when(!this.rows.length, el => el.child(div().flex_1().p(24).text_color(t.muted)
+        .child(this.searching ? "No matching resources" : this.tab === "processes" ? "No sampled processes" : "No running terminals")))
+      .child(v_flex().px(12).py(8).border_t(1).border_color(t.border).gap(3).text_color(t.muted).flex_none()
+        .when(Boolean(summary.root?.message), el => el.child(clean(summary.root.message)))
+        .when(this.tab === "terminals" && [...this.snapshots.values()].some(s => s.listeners?.state !== "ready" ||
+          (this.portSearch && s.listeners.scope !== "all")), el => el.child("Listener coverage incomplete"))
+        .child(this.tab === "terminals" ? "Read-only · Listening ports are not verified web services"
+          : this.tab === "processes" ? "Read-only · Managed terminals and their child processes" : "Read-only · Expand a row for process details"));
+  }
+
+  render(cx) {
+    this.now = Date.now();
+    this.rebuild();
+    const t = theme(), summary = this.summary();
+    const memory = bytes(summary.memory), load = cpu(summary.cpu);
+    const label = `CPU ${load} · memory ${memory}`;
+    const trigger = Button.new("resource-status-trigger").h(22).px(4).rounded(4).text_size(11).text_color(t.muted)
+      .tab_index(0).accessibility_label(`Resources: ${label}`)
+      .tooltip(`${summary.machine ?? "This computer"} · ${summary.root?.metric ?? "memory"} ${bytes(summary.memory)} · CPU ${cpu(summary.cpu)}${summary.root?.unknown ? " · Coverage incomplete" : ""}`)
+      .on_hover((hovered, cx) => { this.hovered = hovered; cx.notify(); })
+      .hover(el => el.bg(t.hover).text_color(t.foreground))
+      .child(h_flex().gap(6).items_center()
+        .child(svg("mods/resource-monitor/activity.svg").size(12)).child(load)
+        .child(div().text_color(t.dim).child("·"))
+        .child(svg("mods/resource-monitor/memory.svg").size(12))
+        .child(memory));
+    return h_flex().size_full().px(6).items_center().bg(t.chrome).border_t(1).border_color(t.border)
+      .child(Popover.new("resource-status-popover").open(this.open).anchor("bottom_right").track_focus(this.handle).overlay_closable(true)
+        .on_open_change((open, cx) => {
+          this.open = open;
+          if (open) { this.portsAt.clear(); this.refresh(cx); }
+          cx.notify();
+        }).trigger(trigger).when(this.open, el => el.content(this.panel(cx))));
   }
 }

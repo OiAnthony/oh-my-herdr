@@ -1,3 +1,5 @@
 **/*.d.ts
 **/jsconfig.json
 **/*.error
+native/resource-sample/target/
+mods/resource-monitor/bin/herdr-resource-sample*
