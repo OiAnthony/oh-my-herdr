@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { selectTarget, resolveTarget } from "./mods/open-with/target.js";
-import { folderUri, protocolUrl, resolveHost, sshAuthority, uriPath } from "./mods/open-with/uri.js";
-import { availableApps, DEFAULT_APPS, launch } from "./mods/open-with/apps.js";
-import { hostOf, launchVscode } from "./mods/open-with/vscode.js";
+import { selectTarget, resolveTarget } from "../mods/open-with/target.js";
+import { folderUri, protocolUrl, resolveHost, sshAuthority, uriPath } from "../mods/open-with/uri.js";
+import { availableApps, DEFAULT_APPS, launch } from "../mods/open-with/apps.js";
+import { hostOf, launchVscode } from "../mods/open-with/vscode.js";
 
 const ok = { code: 0, stdout: "", stderr: "" };
 const failed = { code: 1, stdout: "", stderr: "not available" };

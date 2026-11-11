@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { agentTitle, terminalTitle } from "./mods/agents-professional/title.js";
+import { agentTitle, terminalTitle } from "../mods/agents-professional/title.js";
 
 const omp = { key: "omp", name: "OMP", icon: "omp.svg" };
 

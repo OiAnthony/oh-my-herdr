@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { captureTarget, customCommand, resolveLaunch, newTabCommand } from "./mods/agent-launcher/launch.js";
+import { captureTarget, customCommand, resolveLaunch, newTabCommand } from "../mods/agent-launcher/launch.js";
 
 const local = { id: "s1", machine: null, folder: "/repo", active: true };
 const remote = { id: "host/s1", machine: "host", folder: "/remote", active: false };

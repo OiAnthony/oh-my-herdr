@@ -5,9 +5,9 @@ import { once } from "node:events";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
-import { parseNative } from "./mods/resource-monitor/collect.js";
+import { parseNative } from "../mods/resource-monitor/collect.js";
 
-const helper = fileURLToPath(new URL(`./mods/resource-monitor/bin/herdr-resource-sample${process.platform === "win32" ? ".exe" : ""}`, import.meta.url));
+const helper = fileURLToPath(new URL(`../mods/resource-monitor/bin/herdr-resource-sample${process.platform === "win32" ? ".exe" : ""}`, import.meta.url));
 const sample = (roots = [process.pid], ports = false) => JSON.parse(execFileSync(helper,
   [`--roots=${roots.join(",")}`, ...(ports ? [ports === "all" ? "--all-ports" : "--ports"] : [])], { encoding: "utf8", timeout: 3000 }));
 

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
 
-const source = readFileSync(new URL("./mods/tabs-professional/main.js", import.meta.url), "utf8")
+const source = readFileSync(new URL("../mods/tabs-professional/main.js", import.meta.url), "utf8")
   .replace(/^import .+;\n/gm, "").replace("export default class Tabs", "globalThis.Tabs = class Tabs");
 
 function fixture() {

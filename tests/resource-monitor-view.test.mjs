@@ -2,12 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
 import { readFileSync } from "node:fs";
-import { createCollector } from "./mods/resource-monitor/collect.js";
-import { buildResources, MemoryHistory } from "./mods/resource-monitor/model.js";
-import { buildResourceTree, processRows, resourceRows } from "./mods/resource-monitor/tree.js";
-import { bytes, cpu, footerCpu, footerCpuColor, endpoint, clean } from "./mods/resource-monitor/format.js";
+import { createCollector } from "../mods/resource-monitor/collect.js";
+import { buildResources, MemoryHistory } from "../mods/resource-monitor/model.js";
+import { buildResourceTree, processRows, resourceRows } from "../mods/resource-monitor/tree.js";
+import { bytes, cpu, footerCpu, footerCpuColor, endpoint, clean } from "../mods/resource-monitor/format.js";
 
-const source = readFileSync(new URL("./mods/resource-monitor/main.js", import.meta.url), "utf8")
+const source = readFileSync(new URL("../mods/resource-monitor/main.js", import.meta.url), "utf8")
   .replace(/^import .+;\n/gm, "").replace("export default class ResourceMonitor", "globalThis.ResourceMonitor = class ResourceMonitor");
 const walk = node => typeof node === "string" ? [] : [node, ...node.items.flatMap(walk)];
 const text = node => typeof node === "string" ? [node] : node.items.flatMap(text);

@@ -4,7 +4,7 @@ import * as fs from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
-import { check, install, loadBundle, resolveHome, uninstall } from "./oh-my-herdr.mjs";
+import { check, install, loadBundle, resolveHome, uninstall } from "../oh-my-herdr.mjs";
 
 const names = ["open-with", "professional-status", "git-graph", "tabs-professional", "agent-launcher", "agents-professional", "professional-panels", "resource-monitor"];
 const recordPath = ".oh-my-herdr/installed.json";
@@ -476,7 +476,7 @@ test("matching personal shortcuts are adopted without inventing defaults or rewr
 
 test("shipped Changes commands replace native Graph sequences and restore them on uninstall", async t => {
   const { sourceRoot, home, options } = await fixture(t);
-  const preset = await fs.readFile(new URL("./keybindings.json", import.meta.url), "utf8");
+  const preset = await fs.readFile(new URL("../keybindings.json", import.meta.url), "utf8");
   await put(sourceRoot, "keybindings.json", preset);
   await install(home, options);
   const keys = JSON.parse(await fs.readFile(join(home, "keys.json")));

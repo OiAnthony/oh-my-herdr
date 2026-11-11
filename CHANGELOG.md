@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- 将九个 Node 测试文件迁入 `tests/`，修正模块、快捷键预设和原生 helper 的相对路径；测试命令改为 `node --test tests/*.test.mjs`。新增开发指南，资源监控方案迁至 `docs/design/resource-monitor.md`，历史验收记录归入本 changelog。套件入口、Mod 和布局路径、安装行为不变。
 - 新增 `install.sh`，一条命令完成资源采集程序构建、布局与八个 Mods 部署、快捷键合并和 `herdr-app check`；支持 `--switch` 和 `--dry-run`。README 改为以安装和使用为主，并保留 Gallery `RECIPE.md`、真实窗口预览和统一的布局源文件 `layouts/Professional.json`、`layouts/Professional.svg`。
 - 新增根 Apache-2.0 许可、NOTICE 与第三方来源清单，部署 Mod 自带必要许可。核实 Herdr v0.1.14 与 Open VS Code 对应源码的 Apache-2.0 / MIT 条款，保留其他资源及 native 依赖许可；移除未核清分发权的四枚应用 PNG，以中性图标替代，应用选项和启动行为不变。
 
@@ -44,6 +45,24 @@
 - diff 正文仅显示差异内容并占满面板，移除重复的文件路径、提交、仓库与只读说明区；保留行号、增删标记、滚动和必要的加载/异常状态。
 - Professional 的 diff pane title 改为文件相对路径；固定打开时的 workspace/cwd，在 workspace 下查看 submodule 时保留子仓库前缀，直接在子仓库中查看则相对该仓库。其他 pane 保留原有标题、状态与操作，diff 正文不增加标题区。
 - 移除 Git Graph 文件详情与 diff 的 F4 源文件跳转，以及专用源文件预览、tab 复用状态处理和相关测试；保留 diff 预览、固定 tab 和路径标题，不修改全局快捷键。
+
+### 资源监控历史验收记录
+
+以下记录迁自原资源监控方案，保留当时的验证范围与限制，不代表本次目录整理重新执行了这些验收。
+
+130 项 Node 回归与 1 项 Cargo 单元测试通过。覆盖 CPU 忙循环对照、嵌套根与真实子进程、IPv4/IPv6 监听、全机端口搜索、无 argv 输出、非法 CLI 输入、CPU 预热与 PID 复用、异步作废、单一定时器、显示值不变免重绘、失活暂停、监听按需请求、卸载与权限回滚。Linux / Windows 通过 x86_64 Cargo check，尚未运行验收。
+
+隔离应用安装后，8 个 Mod 的原生加载检查通过。独立应用 home 和 Core 会话中的原生帧已确认真实终端采样、footer 数值、横向页签、表头列对齐、PTYs 趋势与真实监听端口筛选。为在后台验证采样，测试副本强制视为活动窗口；发布源码仍按真实窗口活动状态暂停采集。端口筛选通过测试副本设置初始条件，不视为真实输入交互验收。
+
+原生宿主加载检查覆盖 footer 与强制打开的 Resources / PTYs；新增 Processes 后，另用隔离 Mod 检查了新增页面及已知、未知、过期进程行。33 项相关回归通过，覆盖平表去重、跨机器 PID、PID 复用、过滤、排序和共用采样。
+
+2026-11-11 合并为 Tree 后，34 项相关回归与 Herdr Desktop 0.1.15 的 Mod 加载检查通过。隔离应用 home、Core 会话和本机监听进程验证了 Tree / Processes 实际渲染、内存趋势、页签切换，以及 Ports 开关的启用与关闭。真实端口通过隔离副本预设筛选条件显示；关闭 Ports 后，端口行、端口筛选框与监听说明消失。原生辅助功能接口未能写入筛选框，因此预设条件验证不视为真实输入交互验收；本次未验证物理鼠标、键盘或滚动，未更新日常安装。
+
+通过宿主桌面工具在真实窗口点击 footer 并切换 Processes，已确认 Space → Pane 展示、平表四列对齐和真实采样数据。这不能证明像素级 1:1；实际筛选输入、排序点击、键盘焦点、Esc / outside dismissal、滚动、主题和窄窗口仍需真实窗口验收。只读范围和布局均在自维护扩展内，不修改 Desktop/Core/TUI 本体。
+
+2026-11-11 改为键入过滤后，38 项相关回归、完整 Node 测试与 Herdr Desktop 0.1.15 的 Mod 加载检查通过。隔离应用用固定样本验证无搜索框的 Tree 和预设 `worker 12.5% 2.0 MB` 的 Processes 渲染。通过原生 action 分发确认第一次 Esc 清空搜索且 `open=true`，释放后第二次令 `open=false`。后台窗口的辅助功能接口未暴露可操作控件，截图在后台也未持续刷新，因此这些结果不视为真实物理按键及关闭画面的验收。未更新日常安装。
+
+随后修复空格关闭弹层的回归。宿主 Popover 的空格与 Enter 绑定会先分发 Confirm action，再决定是否发送原始键盘事件；Resource Manager 现在为这两个按键注册局部 action。模拟该分发顺序的回归测试先复现空格令 `open=false`，修复后通过；39 项相关测试覆盖 Tree / Processes 的空格分词、Enter 行展开和两次 Esc。完整 Node 测试与 0.1.15 Mod 加载检查通过。本次未验证真实物理按键，未更新日常安装。
 
 ## 0.3.0 — 2026-11-10
 

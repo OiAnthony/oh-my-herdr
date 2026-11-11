@@ -31,7 +31,7 @@ Herdr 提供 working、blocked、done、idle 状态。Agents 列表保留原生�
 - 默认项启动前重新查询 Herdr 程序表。程序未安装、原 space 已关闭或机器不可用时明确报错，不静默换机器或程序。
 - 菜单保留 Terminal、New space、New worktree、Open worktree。方向键选择、Enter 启动、D 设为默认、Esc 关闭。
 
-启动器不会安装 Agent、发送首条任务或自行管理终端生命周期。注册 OMP 等未内置程序的方法见 [README](README.md#注册-omp-或其他-agent)。
+启动器不会安装 Agent、发送首条任务或自行管理终端生命周期。注册 OMP 等未内置程序的方法见 [README](README.md#配置)。
 
 ### Open With
 
@@ -85,6 +85,8 @@ Tree 的 Ports 默认关闭。开启后每 5 秒采集监听端口，且只有�
 Mods 通过 `herdr` 读取 spaces、panes、terminals、agents、focused、theme、layout 等数据，通过 `run` 分发窗口命令；`exec`、`hc` 用于 Git、程序启动、Core 查询和采集 helper。GPUI 控件由 `gpui-kit` / `gpui-base` 描述，没有 DOM、HTML/CSS 或 Node.js API。
 
 资源采集程序源码在 `native/resource-sample/`，依赖固定于 Cargo.lock。macOS 使用 libproc，Linux 使用 procfs，Windows 使用原生进程与 TCP API。构建只生成当前平台的程序；远端需自行构建并把 `herdr-resource-sample` 放进 PATH。
+
+构建、测试及实机验证步骤见[开发指南](docs/development.md)，资源采集架构与协议见[资源监控设计](docs/design/resource-monitor.md)。
 
 ### 安装现有实现
 

@@ -5,10 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { diffPath, diffTitle } from "./mods/git-graph/path.js";
-import { inlineHistory } from "./mods/git-graph/history.js";
-import { previewOpen } from "./mods/git-graph/preview.js";
-import { submoduleWorkspace } from "./mods/git-graph/repos.js";
+import { diffPath, diffTitle } from "../mods/git-graph/path.js";
+import { inlineHistory } from "../mods/git-graph/history.js";
+import { previewOpen } from "../mods/git-graph/preview.js";
+import { submoduleWorkspace } from "../mods/git-graph/repos.js";
 
 const commits = [{ hash: "tip" }, { hash: "merge" }, { hash: "root" }];
 const keys = history => Array.from({ length: history.count }, (_, i) => history.key(i));

@@ -106,7 +106,8 @@ node oh-my-herdr.mjs uninstall
 
 - [Changelog](CHANGELOG.md)
 - [Gallery recipe](RECIPE.md)
-- [资源监控实施方案](docs/resource-monitor-plan.md)
+- [开发指南](docs/development.md)
+- [资源监控设计](docs/design/resource-monitor.md)
 - [许可与来源](THIRD_PARTY.md)
 
 Linux、Windows 的资源采集和 Remote - SSH 尚未完成目标环境端到端验收；资源弹层的筛选、排序和键盘交互尚未完成完整实机验收。原创代码采用 Apache-2.0，第三方代码和资源保留各自许可。

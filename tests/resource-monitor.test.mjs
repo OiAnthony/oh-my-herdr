@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildResources, MemoryHistory, binding } from "./mods/resource-monitor/model.js";
-import { buildResourceTree, processRows, resourceRows } from "./mods/resource-monitor/tree.js";
-import { parseNative, createCollector } from "./mods/resource-monitor/collect.js";
+import { buildResources, MemoryHistory, binding } from "../mods/resource-monitor/model.js";
+import { buildResourceTree, processRows, resourceRows } from "../mods/resource-monitor/tree.js";
+import { parseNative, createCollector } from "../mods/resource-monitor/collect.js";
 
 const at = 100000;
 const process = (pid, ppid = 0, memory = 10, extra = {}) => ({ pid, ppid, memory, cpu: 1, name: `p${pid}`, start: `start-${pid}`, ...extra });

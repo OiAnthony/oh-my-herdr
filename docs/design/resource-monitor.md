@@ -1,6 +1,6 @@
-# Resources 原生监控方案
+# Resources 原生监控设计
 
-状态：资源监控已安装到本机日常应用；本次 Tree 合并尚未更新日常安装，目标 Herdr Desktop 0.1.15。运行配置与构建产物不入库，套件尚未发布新版本。
+目标版本为 Herdr Desktop 0.1.15。本文记录资源采集架构、JSON 协议和性能口径；构建、测试与实机验证步骤见[开发指南](../development.md)，历史验收记录见 [Changelog](../../CHANGELOG.md#资源监控历史验收记录)。
 
 ## 功能与边界
 
@@ -92,20 +92,9 @@ macOS 主列、排序、趋势统一使用 Footprint，详情保留 RSS。Linux 
 
 远端需要为该 OS/架构构建并将 helper 放入 PATH。当前不自动安装远端软件，不提权。helper 缺失、格式错误、非零退出或超时显示错误，不退回 ps/top/lsof/PowerShell。当前 native schema 与 JS collector 必须配套更新。
 
-## 验证与性能口径
+## 性能口径
 
-```sh
-node scripts/build-resource-helper.mjs
-node --test *.test.mjs
-cargo test --locked --manifest-path native/resource-sample/Cargo.toml
-cargo fmt --check --manifest-path native/resource-sample/Cargo.toml
-cargo check --locked --manifest-path native/resource-sample/Cargo.toml --target x86_64-unknown-linux-gnu --target x86_64-pc-windows-gnu
-python3 scripts/bench-resource-helper.py --roots=123,456 --samples=30
-python3 scripts/bench-resource-helper.py --roots=123,456 --samples=30 --ports-every=5
-python3 scripts/bench-resource-helper.py --roots=123,456 --samples=30 --ports-every=5 --all-ports
-```
-
-交叉检查需先安装相应 Rust target。原生测试必须使用本机新构建的 helper，不以字符串解析测试代替真实系统 API 验证。
+性能采样命令和测量边界见[开发指南](../development.md#资源采集性能测量)。以下为历史测量，不代表后续版本或当前运行环境的性能。
 
 2026-11-11，macOS arm64，9 个受管根，采样期间后代数量变化，末次约 21 个进程。三种模式分别持续 30 秒，1 Hz；监听模式每 5 秒扫描一次。CPU 为单核百分比。
 
@@ -130,17 +119,3 @@ python3 scripts/bench-resource-helper.py --roots=123,456 --samples=30 --ports-ev
 按显示值抑制重绘前，相同场景的弹层增量约 2.19%；应用该优化后为约 0.89%。两轮基线存在变化，不能把差值当作固定收益。活跃负载下显示值可能每秒改变，仍需单独测量。
 
 目标为完整链路稳态不超过 0.5% 单核，验收上限 1%，helper 峰值 RSS 不超过 10 MiB。当前 helper 达到 1% 与 10 MiB 上限；原生应用短测增量接近 1% 上限，0.5% 目标尚未达到。完整链路未验收，尤其是 tooltip 悬停、数据频繁变化的弹层、远端 exec 包装与多机器并发。
-
-130 项 Node 回归与 1 项 Cargo 单元测试通过。覆盖 CPU 忙循环对照、嵌套根与真实子进程、IPv4/IPv6 监听、全机端口搜索、无 argv 输出、非法 CLI 输入、CPU 预热与 PID 复用、异步作废、单一定时器、显示值不变免重绘、失活暂停、监听按需请求、卸载与权限回滚。Linux / Windows 通过 x86_64 Cargo check，尚未运行验收。
-
-隔离应用安装后，8 个 Mod 的原生加载检查通过。独立应用 home 和 Core 会话中的原生帧已确认真实终端采样、footer 数值、横向页签、表头列对齐、PTYs 趋势与真实监听端口筛选。为在后台验证采样，测试副本强制视为活动窗口；发布源码仍按真实窗口活动状态暂停采集。端口筛选通过测试副本设置初始条件，不视为真实输入交互验收。
-
-原生宿主加载检查覆盖 footer 与强制打开的 Resources / PTYs；新增 Processes 后，另用隔离 Mod 检查了新增页面及已知、未知、过期进程行。33 项相关回归通过，覆盖平表去重、跨机器 PID、PID 复用、过滤、排序和共用采样。
-
-2026-11-11 合并为 Tree 后，34 项相关回归与 Herdr Desktop 0.1.15 的 Mod 加载检查通过。隔离应用 home、Core 会话和本机监听进程验证了 Tree / Processes 实际渲染、内存趋势、页签切换，以及 Ports 开关的启用与关闭。真实端口通过隔离副本预设筛选条件显示；关闭 Ports 后，端口行、端口筛选框与监听说明消失。原生辅助功能接口未能写入筛选框，因此预设条件验证不视为真实输入交互验收；本次未验证物理鼠标、键盘或滚动，未更新日常安装。
-
-通过宿主桌面工具在真实窗口点击 footer 并切换 Processes，已确认 Space → Pane 展示、平表四列对齐和真实采样数据。这不能证明像素级 1:1；实际筛选输入、排序点击、键盘焦点、Esc / outside dismissal、滚动、主题和窄窗口仍需真实窗口验收。只读范围和布局均在自维护扩展内，不修改 Desktop/Core/TUI 本体。
-
-2026-11-11 改为键入过滤后，38 项相关回归、完整 Node 测试与 Herdr Desktop 0.1.15 的 Mod 加载检查通过。隔离应用用固定样本验证无搜索框的 Tree 和预设 `worker 12.5% 2.0 MB` 的 Processes 渲染。通过原生 action 分发确认第一次 Esc 清空搜索且 `open=true`，释放后第二次令 `open=false`。后台窗口的辅助功能接口未暴露可操作控件，截图在后台也未持续刷新，因此这些结果不视为真实物理按键及关闭画面的验收。未更新日常安装。
-
-随后修复空格关闭弹层的回归。宿主 Popover 的空格与 Enter 绑定会先分发 Confirm action，再决定是否发送原始键盘事件；Resource Manager 现在为这两个按键注册局部 action。模拟该分发顺序的回归测试先复现空格令 `open=false`，修复后通过；39 项相关测试覆盖 Tree / Processes 的空格分词、Enter 行展开和两次 Esc。完整 Node 测试与 0.1.15 Mod 加载检查通过。本次未验证真实物理按键，未更新日常安装。
