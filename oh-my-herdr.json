@@ -2,19 +2,26 @@
   "name": "oh-my-herdr",
   "version": "0.3.0",
   "herdrVersion": "0.1.15",
+  "license": "Apache-2.0",
+  "thirdPartyNotices": ["NOTICE", "THIRD_PARTY.md"],
   "mods": [
     {
       "name": "open-with",
       "source": "mods/open-with",
       "version": "0.5.0",
-      "license": "Mixed; see provenance",
+      "license": "Apache-2.0 AND MIT AND CC0-1.0",
       "provenance": {
         "originalLicense": "Apache-2.0",
         "origin": "Maintained workspace source; matches runtime source at import.",
-        "branding": "icons/NOTICE.txt; local use only, public redistribution not cleared.",
+        "branding": "Original neutral application artwork; Cursor/Sublime from Simple Icons under CC0-1.0. See icons/NOTICE.txt; trademark rights excluded.",
         "merged": {
           "origin": "Local runtime mods/open-vscode snapshot imported in 0.1.0; merged into open-with in 0.3.0.",
-          "license": "No license file present in the imported open-vscode snapshot."
+          "upstream": "https://github.com/CacaoRick/herdr-open-vscode",
+          "verifiedSourceRevision": "1dfa20974f6da63b195660b68dd120bed2412184",
+          "license": "MIT",
+          "copyright": "Copyright (c) 2026 CacaoRick",
+          "licenseFile": "mods/open-with/LICENSE.open-vscode",
+          "evidence": "Corresponding published source and license verified; the historical runtime import commit was not recorded."
         }
       }
     },
@@ -23,7 +30,9 @@
       "source": "mods/resource-monitor",
       "nativeHelper": true,
       "provenance": {
-        "origin": "Native read-only process-tree resources and TCP listener monitor; original workspace implementation."
+        "origin": "Native read-only process-tree resources and TCP listener monitor; original workspace implementation.",
+        "license": "Apache-2.0 for original code; Lucide/Feather ISC/MIT artwork and native dependency exceptions retained.",
+        "dependencyNotices": "mods/resource-monitor/licenses/README.txt"
       }
     },
     {
@@ -31,6 +40,10 @@
       "source": "mods/professional-status",
       "provenance": {
         "origin": "Professional layout adapter; status summary and palette hint derived from workspace-status 0.1.14.",
+        "upstream": "https://github.com/herdrdev/herdr-app",
+        "verifiedSourceRevision": "2405bf388c568c3ed479f05b8e405ccfa44b3f2c",
+        "sourceTag": "v0.1.14",
+        "license": "Apache-2.0",
         "clonedFrom": { "name": "workspace-status", "version": "0.1.14" }
       }
     },
@@ -39,6 +52,10 @@
       "source": "mods/tabs-professional",
       "provenance": {
         "origin": "Personal tabs adapter with the Agent Launcher split button; preserves tabs and Files/Changes behavior.",
+        "upstream": "https://github.com/herdrdev/herdr-app",
+        "verifiedSourceRevision": "2405bf388c568c3ed479f05b8e405ccfa44b3f2c",
+        "sourceTag": "v0.1.14",
+        "license": "Apache-2.0",
         "clonedFrom": { "name": "tabs", "version": "0.1.14" }
       }
     },
@@ -47,6 +64,10 @@
       "source": "mods/professional-panels",
       "provenance": {
         "origin": "Personal Files/Changes focus adapter; panel sources cloned from installed Herdr Desktop 0.1.14.",
+        "upstream": "https://github.com/herdrdev/herdr-app",
+        "verifiedSourceRevision": "2405bf388c568c3ed479f05b8e405ccfa44b3f2c",
+        "sourceTag": "v0.1.14",
+        "license": "Apache-2.0",
         "clonedFrom": [
           { "name": "files", "version": "0.1.14" },
           { "name": "changes", "version": "0.1.14" }
@@ -58,6 +79,10 @@
       "source": "mods/agents-professional",
       "provenance": {
         "origin": "Personal Agents adapter; removes duplicate OMP branding from automatic titles while preserving status and task text.",
+        "upstream": "https://github.com/herdrdev/herdr-app",
+        "verifiedSourceRevision": "2405bf388c568c3ed479f05b8e405ccfa44b3f2c",
+        "sourceTag": "v0.1.14",
+        "license": "Apache-2.0",
         "clonedFrom": { "name": "agents", "version": "0.1.14" }
       }
     },
@@ -66,6 +91,10 @@
       "source": "mods/agent-launcher",
       "provenance": {
         "origin": "Agent launch menu and custom-command editor; menu actions derived from new-menu 0.1.14.",
+        "upstream": "https://github.com/herdrdev/herdr-app",
+        "verifiedSourceRevision": "2405bf388c568c3ed479f05b8e405ccfa44b3f2c",
+        "sourceTag": "v0.1.14",
+        "license": "Apache-2.0",
         "branding": "icons/SOURCE.oh-my-pi.txt; OMP icon under MIT, see icons/LICENSE.oh-my-pi",
         "clonedFrom": { "name": "new-menu", "version": "0.1.14" }
       }
@@ -74,12 +103,13 @@
       "name": "git-graph",
       "source": "mods/git-graph",
       "upstream": "https://github.com/rabeeh-ta/herdr-git-graph",
-      "license": "MIT",
+      "license": "MIT AND Apache-2.0 AND ISC",
       "provenance": {
         "origin": "Local runtime mods/git-graph-main snapshot.",
         "observedVersion": "0.3.2",
         "versionEvidence": "Runtime update.js VERSION; updater excluded from bundle.",
         "copyright": "Copyright (c) 2026 Rabeeh T A",
+        "paneHeader": { "upstream": "https://github.com/herdrdev/herdr-app", "verifiedSourceRevision": "2405bf388c568c3ed479f05b8e405ccfa44b3f2c", "source": "defaults/mods/pane/main.js", "license": "Apache-2.0" },
         "changes": [
           "Removed standalone updater, release network checks, prompt, and update UI.",
           "Targeted list zoom behavior to Herdr Desktop 0.1.14.",
@@ -91,13 +121,13 @@
   "layouts": [
     {
       "name": "Professional",
-      "source": "layouts/professional/Professional.json",
-      "preview": "layouts/professional/Professional.svg"
+      "source": "layouts/Professional.json",
+      "preview": "layouts/Professional.svg"
     }
   ],
   "provenance": {
     "importedAt": "2026-11-09",
-    "distribution": "Local use only; bundled product branding has no cleared public redistribution grant.",
-    "sourcePolicy": "Maintained workspace sources take precedence. Imported runtime snapshots are not claimed to match an upstream tag or commit."
+    "distribution": "Uncleared installed-app PNG artwork removed; redistribution retains third-party licenses and notices. See NOTICE and THIRD_PARTY.md.",
+    "sourcePolicy": "Maintained workspace sources take precedence. Verified corresponding source revisions are recorded where available; historical runtime imports are not claimed byte-identical to a Git tag or commit."
   }
 }

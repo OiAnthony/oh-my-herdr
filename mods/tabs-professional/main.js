@@ -1,3 +1,6 @@
+// Adapted from Herdr tabs v0.1.14 (Apache-2.0).
+// Modified by oh-my-herdr: launcher split button and Files/Changes focus behavior.
+// Fixed upstream source and license: ../../THIRD_PARTY.md; ../../LICENSE.
 import { View, div, svg, image } from "gpui-kit";
 import { Button, h_flex } from "gpui-base";
 import { spaces, panes, run, openOverlay, theme, window, shared, setShared, layout, settings, nextCommand, focused } from "herdr";

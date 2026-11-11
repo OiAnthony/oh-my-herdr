@@ -1,3 +1,6 @@
+// Adapted from Herdr changes v0.1.14 (Apache-2.0).
+// Modified by oh-my-herdr: exported panel for the Professional focus adapter.
+// Fixed upstream source and license: ../../THIRD_PARTY.md; ../../LICENSE.
 import { View, div } from "gpui-kit";
 import { v_flex, h_flex, InputState, Input, Scrollbar, v_virtual_list } from "gpui-base";
 import { spaces, panes, focused, exec, readTextFile, watchFolder, theme, settings } from "herdr";

@@ -1,3 +1,6 @@
+// Target capture evolved from CacaoRick/herdr-open-vscode main.js (MIT).
+// Modified by oh-my-herdr: capture cwd/machine atomically and resolve repository
+// roots on that machine. See LICENSE.open-vscode and ../../THIRD_PARTY.md.
 // Select a directory and its machine together; never borrow a cwd from another terminal.
 const machineOf = terminal => terminal?.includes("/") ? terminal.split("/")[0] : null;
 

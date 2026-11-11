@@ -1,3 +1,6 @@
+// Original Open With UI; VS Code launch/target integration incorporates
+// CacaoRick/herdr-open-vscode (MIT), adapted for this launcher and error UI.
+// See LICENSE.open-vscode and ../../THIRD_PARTY.md.
 import { View, div, image, svg } from "gpui-kit";
 import { Button, h_flex, v_flex } from "gpui-base";
 import { appHome, closeOverlay, exec, hc, nextCommand, notify, openOverlay, props, readTextFile, run, shared, setShared, theme, window } from "herdr";

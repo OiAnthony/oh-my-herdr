@@ -1,4 +1,6 @@
-// Header derived from Herdr's pane 0.1.14. Kept here because pane titles are read-only.
+// Adapted from Herdr's pane v0.1.14 (Apache-2.0).
+// Modified for read-only diff titles and Professional pane composition.
+// Source revision and full license: NOTICE, LICENSE.Apache-2.0.
 import { div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { panes, spaces, props, run, theme, home, shared } from "herdr";

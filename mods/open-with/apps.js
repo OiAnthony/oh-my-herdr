@@ -1,10 +1,10 @@
 import { launchVscode } from "./vscode.js";
 
 export const DEFAULT_APPS = [
-  { id: "vscode", title: "VS Code", bundleId: "com.microsoft.VSCode", icon: "mods/open-with/icons/vscode.png" },
-  { id: "finder", title: "Finder", bundleId: "com.apple.finder", icon: "mods/open-with/icons/finder.png" },
-  { id: "zed", title: "Zed", bundleId: "dev.zed.Zed", icon: "mods/open-with/icons/zed.png" },
-  { id: "idea", title: "IntelliJ IDEA", bundleId: "com.jetbrains.intellij", icon: "mods/open-with/icons/idea.png" },
+  { id: "vscode", title: "VS Code", bundleId: "com.microsoft.VSCode", icon: "mods/open-with/icons/application.svg" },
+  { id: "finder", title: "Finder", bundleId: "com.apple.finder", icon: "mods/open-with/icons/application.svg" },
+  { id: "zed", title: "Zed", bundleId: "dev.zed.Zed", icon: "mods/open-with/icons/application.svg" },
+  { id: "idea", title: "IntelliJ IDEA", bundleId: "com.jetbrains.intellij", icon: "mods/open-with/icons/application.svg" },
   { id: "cursor", title: "Cursor", bundleId: "com.todesktop.230313mzl4w4u92", icon: "mods/open-with/icons/cursor.svg" },
   { id: "sublime", title: "Sublime Text", bundleId: "com.sublimetext.4", icon: "mods/open-with/icons/sublime.svg" },
 ];

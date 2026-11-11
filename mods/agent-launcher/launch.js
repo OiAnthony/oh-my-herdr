@@ -1,3 +1,6 @@
+// Menu command semantics adapted from Herdr new-menu v0.1.14 (Apache-2.0).
+// Modified by oh-my-herdr: captured target, saved defaults, custom argv and launch modes.
+// Fixed upstream source and license: ../../THIRD_PARTY.md; ../../LICENSE.
 // Shared-state wire format is also read by the independent tabs-professional adapter.
 export const DEFAULTS = "agent-launcher.defaults";
 export const COMMANDS = "agent-launcher.commands";

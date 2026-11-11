@@ -185,8 +185,8 @@ export async function loadBundle(root = ROOT) {
   }
   for (const layout of manifest.layouts) {
     if (!LAYOUTS.has(layout.name) || layouts.has(layout.name)
-        || layout.source !== `layouts/professional/${layout.name}.json`
-        || layout.preview !== `layouts/professional/${layout.name}.svg`) throw new Error("Invalid manifest layout");
+        || layout.source !== `layouts/${layout.name}.json`
+        || layout.preview !== `layouts/${layout.name}.svg`) throw new Error("Invalid manifest layout");
     layouts.add(layout.name);
     await add(layout.source, `layouts/${layout.name}.json`);
     await add(layout.preview, `layouts/${layout.name}.svg`);

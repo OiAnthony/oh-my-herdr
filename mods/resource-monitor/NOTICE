@@ -1,0 +1,14 @@
+oh-my-herdr / Resource Monitor
+
+Project-original Mod and native helper code: Apache-2.0; see LICENSE.
+The native helper package is herdr-resource-sample 0.1.0.
+
+Artwork exceptions: Lucide ISC and applicable Feather MIT terms are retained
+in LICENSE.lucide. No icon copyright is reassigned to this project.
+
+Native helper dependency licenses and copyright notices accompany the helper
+in licenses/CARGO-DEPENDENCIES.txt. Exact versions, registry checksums,
+active dependency closure, build-dependency coverage and known cache gaps
+are documented in licenses/README.txt. Do not omit that licenses/ directory
+when copying or redistributing the native helper. Project Apache licensing
+does not replace the dependencies' separate terms.

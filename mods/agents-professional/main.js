@@ -1,3 +1,6 @@
+// Adapted from Herdr agents v0.1.14 (Apache-2.0).
+// Modified by oh-my-herdr: Professional focus behavior and automatic title cleanup.
+// Fixed upstream source and license: ../../THIRD_PARTY.md; ../../LICENSE.
 // Agents in grouped or priority views; parents take their most urgent sub-agent's place.
 // A viewed done agent stays in Done until left.
 

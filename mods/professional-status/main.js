@@ -1,3 +1,6 @@
+// Adapted from Herdr workspace-status v0.1.14 (Apache-2.0).
+// Modified by oh-my-herdr: Professional status composition and palette hints.
+// Fixed upstream source and license: ../../THIRD_PARTY.md; ../../LICENSE.
 import { View, div, svg } from "gpui-kit";
 import { h_flex } from "gpui-base";
 import { spaces, agents, theme, run, window, keys, layout, props } from "herdr";

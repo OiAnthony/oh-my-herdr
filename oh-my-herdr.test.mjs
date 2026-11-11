@@ -26,15 +26,15 @@ async function fixture(t) {
   await fs.mkdir(home);
   const manifest = { name: "oh-my-herdr", version: "0.3.0", herdrVersion: "0.1.15",
     mods: names.map(name => ({ name, source: `mods/${name}` })),
-    layouts: [{ name: "Professional", source: "layouts/professional/Professional.json", preview: "layouts/professional/Professional.svg" }] };
+    layouts: [{ name: "Professional", source: "layouts/Professional.json", preview: "layouts/Professional.svg" }] };
   await put(sourceRoot, "oh-my-herdr.json", JSON.stringify(manifest));
   await put(sourceRoot, "keybindings.json", JSON.stringify(keybindings));
   await put(home, "keys.json", JSON.stringify(defaultKeys));
   for (const name of names) await put(sourceRoot, `mods/${name}/main.js`, `export default ${JSON.stringify(name)};\n`);
   await put(sourceRoot, "mods/open-with/icons/application.svg", "<svg></svg>");
   await put(sourceRoot, "mods/open-with/main.js", 'const icon = "mods/open-with/icons/application.svg";\n');
-  await put(sourceRoot, "layouts/professional/Professional.json", JSON.stringify({ type: "block", preview: "layouts/Professional.svg", content: { mod: "open-with" } }));
-  await put(sourceRoot, "layouts/professional/Professional.svg", "<svg></svg>");
+  await put(sourceRoot, "layouts/Professional.json", JSON.stringify({ type: "block", preview: "layouts/Professional.svg", content: { mod: "open-with" } }));
+  await put(sourceRoot, "layouts/Professional.svg", "<svg></svg>");
   return { root, sourceRoot, home, options: { sourceRoot } };
 }
 async function snapshot(root) {
@@ -261,7 +261,7 @@ test("check reports every failing mod instead of stopping after the first", asyn
 test("check permits installed builtin references but rejects missing resources and unknown mods", async t => {
   const { sourceRoot, home, options } = await fixture(t);
   await put(sourceRoot, "mods/open-with/main.js", 'const icon = "mods/pane/close.svg";');
-  await put(sourceRoot, "layouts/professional/Professional.json", JSON.stringify({ preview: "layouts/Professional.svg", content: { mod: "pane" } }));
+  await put(sourceRoot, "layouts/Professional.json", JSON.stringify({ preview: "layouts/Professional.svg", content: { mod: "pane" } }));
   await put(home, "installed.json", JSON.stringify({ pane: { "main.js": "builtin", "close.svg": "builtin" } }));
   await put(home, "mods/pane/main.js", "builtin");
   await put(home, "mods/pane/close.svg", "<svg></svg>");
@@ -295,7 +295,7 @@ test("check validates literal relative imports and finite template asset choices
 
 test("check refuses a layout preview that does not match its suite destination", async t => {
   const { sourceRoot, home, options } = await fixture(t);
-  await put(sourceRoot, "layouts/professional/Professional.json", JSON.stringify({ preview: "layouts/Other.svg", content: { mod: "open-with" } }));
+  await put(sourceRoot, "layouts/Professional.json", JSON.stringify({ preview: "layouts/Other.svg", content: { mod: "open-with" } }));
   await install(home, options);
   await assert.rejects(check(home, { ...options, runCheck: async () => ({}) }), /Invalid layout preview/);
 });

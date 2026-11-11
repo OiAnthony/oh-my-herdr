@@ -3,6 +3,8 @@
 ## Unreleased
 
 - 新增 `install.sh`，一条命令完成资源采集程序构建、布局与八个 Mods 部署、快捷键合并和 `herdr-app check`；支持 `--switch` 和 `--dry-run`。README 改为以安装和使用为主，并保留 Gallery `RECIPE.md`、真实窗口预览和统一的布局源文件 `layouts/Professional.json`、`layouts/Professional.svg`。
+- 新增根 Apache-2.0 许可、NOTICE 与第三方来源清单，部署 Mod 自带必要许可。核实 Herdr v0.1.14 与 Open VS Code 对应源码的 Apache-2.0 / MIT 条款，保留其他资源及 native 依赖许可；移除未核清分发权的四枚应用 PNG，以中性图标替代，应用选项和启动行为不变。
+
 - 修复 Resource Manager 按空格时关闭弹层的问题：空格和 Enter 使用面板内的 action 绑定，避免宿主 Popover 提前将它们作为确认操作；空格继续输入关键词分隔符，Enter 保留行展开行为。
 
 - Resource Manager 两页移除固定搜索框，改为直接键入过滤所有表格字段；支持空格分词、跨字段组合匹配与 Backspace 编辑。Tree 保留命中项的所属路径和 OS 父进程链；第一次 Esc 清空搜索，第二次 Esc 隐藏弹层。Ports 开启时，非空关键词搜索补充全机监听；关闭 Ports 保留关键词并排除监听字段。

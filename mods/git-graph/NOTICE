@@ -1,0 +1,12 @@
+Git Graph retains its upstream MIT license and copyright in LICENSE.
+Its Lucide/Feather artwork retains the notices in icons/LICENSE-lucide.txt.
+
+pane.js is adapted from herdrdev/herdr-app defaults/mods/pane/main.js,
+v0.1.14, verified corresponding revision:
+2405bf388c568c3ed479f05b8e405ccfa44b3f2c
+https://github.com/herdrdev/herdr-app/blob/2405bf388c568c3ed479f05b8e405ccfa44b3f2c/defaults/mods/pane/main.js
+License: Apache-2.0; complete text in LICENSE.Apache-2.0.
+Modified for read-only diff titles and Professional pane composition.
+The historical installed-app snapshot was not recorded byte-for-byte as a
+Git revision. This identifies corresponding published source and terms,
+not a binary-source attestation or relicensing of Graph's MIT portions.

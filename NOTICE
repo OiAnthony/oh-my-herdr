@@ -1,0 +1,31 @@
+oh-my-herdr
+
+Project-original code is licensed under the Apache License, Version 2.0;
+see LICENSE. This does not relicense third-party contributions or artwork.
+
+Includes adaptations of Herdr Desktop builtin Mods from herdrdev/herdr-app
+v0.1.14, commit 2405bf388c568c3ed479f05b8e405ccfa44b3f2c, Apache-2.0.
+The fixed source tree contains no root NOTICE file. Modified source files
+carry change notices. See THIRD_PARTY.md for the exact source mapping and
+the distinction between tagged source evidence and historical runtime imports.
+
+Includes code derived from CacaoRick/herdr-open-vscode, MIT License,
+Copyright (c) 2026 CacaoRick. See mods/open-with/LICENSE.open-vscode.
+
+Other separately licensed components retain their own terms:
+- git-graph: MIT; mods/git-graph/LICENSE and icons/LICENSE-lucide.txt.
+  Its adapted Herdr pane header remains Apache-2.0; see NOTICE and
+  LICENSE.Apache-2.0 inside that Mod.
+- Agent Launcher OMP artwork: MIT; mods/agent-launcher/icons/LICENSE.oh-my-pi
+  and SOURCE.oh-my-pi.txt.
+- Open With Cursor/Sublime artwork: CC0-1.0, not a trademark license;
+  mods/open-with/icons/NOTICE.txt and LICENSE.CC0-1.0.txt.
+- Resource Monitor Lucide/Feather artwork: ISC/MIT;
+  mods/resource-monitor/LICENSE.lucide.
+- Native helper dependencies: exact per-package licenses, copyright notices
+  and registry checksums in mods/resource-monitor/licenses/CARGO-DEPENDENCIES.txt;
+  coverage and exclusions in mods/resource-monitor/licenses/README.txt.
+
+Application names and trademarks identify supported launch destinations or
+upstream origins. No endorsement or affiliation is implied, and no trademark
+rights are granted by this project's code license.

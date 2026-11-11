@@ -1,3 +1,6 @@
+// Adapted from CacaoRick/herdr-open-vscode, MIT; see LICENSE.open-vscode.
+// Modified by oh-my-herdr: preserve POSIX backslashes, support local Windows/UNC,
+// and validate SSH overrides. Source revision and changes: ../../THIRD_PARTY.md.
 // Pure helpers: where a folder is, as the URIs VS Code understands.
 
 // Everything but unreserved characters, so the URI survives PowerShell and code.cmd.

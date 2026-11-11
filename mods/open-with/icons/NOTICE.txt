@@ -1,42 +1,42 @@
-Open With icon provenance
-Retrieved/extracted: 2026-11-09
+Open With icon provenance (reviewed 2026-11-11)
 
-vscode.png
-  Source: installed Visual Studio Code.app/Contents/Resources/Code.icns
-  Vendor: Microsoft; application bundle com.microsoft.VSCode.
-finder.png
-  Source: macOS Finder.app/Contents/Resources/Finder.icns
-  Vendor: Apple; application bundle com.apple.finder.
-zed.png
-  Source: installed Zed.app/Contents/Resources/Zed.icns
-  Vendor: Zed Industries; application bundle dev.zed.Zed.
-idea.png
-  Source: installed IntelliJ IDEA.app/Contents/Resources/idea.icns
-  Vendor: JetBrains; application bundle com.jetbrains.intellij.
-  All four PNGs were converted directly from the installed ICNS resources
-  with macOS sips, resized to 64 x 64. No replacement logos were drawn.
-  Extraction does not grant a redistribution license. These product logos
-  retain their respective owners' copyright and trademark rights; they
-  are NOT covered by the Mod's code license. Review the vendors' applicable
-  brand/resource terms before public redistribution. No endorsement implied.
+application.svg and chevron-down.svg
+  Original generic artwork for this project, Apache-2.0; see ../LICENSE.
+  The simple chevron menu mark was redrawn on 2026-11-11 without third-party
+  artwork; it is not claimed to be an application brand icon.
+  application.svg intentionally represents VS Code, Finder, Zed and IntelliJ
+  IDEA neutrally, and remains the fallback for custom applications.
+  All application names, bundle IDs and launch choices are preserved.
 
-cursor.svg
-  Source: https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/cursor.svg
-  Collection: Simple Icons, CC0 1.0 Universal.
-  Changes: explicit neutral fill (#d8d8d8); provenance comment added.
-sublime.svg
-  Source: https://raw.githubusercontent.com/simple-icons/simple-icons/develop/icons/sublimetext.svg
-  Collection: Simple Icons, CC0 1.0 Universal.
-  Changes: explicit orange fill (#ff9800); provenance comment added.
-  License: https://github.com/simple-icons/simple-icons/blob/develop/LICENSE.md
+Removed resources
+  vscode.png, finder.png, zed.png and idea.png were extracted from installed
+  application ICNS resources on 2026-11-09. That extraction did not establish
+  a redistribution grant. They are not included in this source/package.
+  No claim is made that an open-source code license covers vendor app icons.
+  Microsoft brand guidelines distinguish the permitted stable logo from the
+  macOS application icon: https://code.visualstudio.com/brand
+  No suitable redistribution clearance was established for these four
+  extracted assets; the project uses its original neutral icon instead.
+
+cursor.svg and sublime.svg
+  Collection: Simple Icons; CC0 1.0 Universal (not Apache-2.0).
+  Fixed source revision: cd796c98565fc466923fc1128b962e133fa3c612
+  Cursor source:
+    https://github.com/simple-icons/simple-icons/blob/cd796c98565fc466923fc1128b962e133fa3c612/icons/cursor.svg
+  Sublime Text source:
+    https://github.com/simple-icons/simple-icons/blob/cd796c98565fc466923fc1128b962e133fa3c612/icons/sublimetext.svg
+  The bundled path data matches those sources; the original retrieval used
+  the develop branch on 2026-11-09. This fixed revision is corroborating
+  source evidence, not a claim of the historical retrieval commit.
+  Changes: provenance comments and explicit fills (#d8d8d8 Cursor;
+  #ff9800 Sublime Text) for contrast in the dark application menu.
+  Full license: LICENSE.CC0-1.0.txt
+  License source:
+    https://github.com/simple-icons/simple-icons/blob/cd796c98565fc466923fc1128b962e133fa3c612/LICENSE.md
   Legal text: https://creativecommons.org/publicdomain/zero/1.0/legalcode
-  CC0 does not waive trademark or patent rights, and does not clear
-  third-party rights. Brand owners retain their respective rights.
-
-application.svg
-  Original generic application-window illustration for this Mod, under
-  the Mod's code license. This is only the fallback for custom entries,
-  not a substitute for any default application's real logo.
+  CC0 does not waive trademark or patent rights or clear third-party rights.
+  Cursor and Sublime Text remain their owners' trademarks. Their names and
+  icons identify launch destinations; no affiliation or endorsement implied.
 
 All runtime resources are bundled locally. No runtime network retrieval
 or installed application bundle access is required to render these icons.

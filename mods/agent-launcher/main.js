@@ -1,3 +1,6 @@
+// Menu actions adapted from Herdr new-menu v0.1.14 (Apache-2.0).
+// Modified by oh-my-herdr: agent picker and custom-command editor.
+// Fixed upstream source and license: ../../THIRD_PARTY.md; ../../LICENSE.
 import { View, div, svg, image } from "gpui-kit";
 import { Button, h_flex, v_flex, InputState, Input } from "gpui-base";
 import { spaces, focused, knownAgents, run, openOverlay, closeOverlay, props, theme, shared, setShared } from "herdr";

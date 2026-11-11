@@ -1,3 +1,6 @@
+// Adapted from Herdr files v0.1.14 (Apache-2.0).
+// Modified by oh-my-herdr: exported panel for the Professional focus adapter.
+// Fixed upstream source and license: ../../THIRD_PARTY.md; ../../LICENSE.
 // A lazy file browser for the focused pane's folder, with bounded read-only previews.
 import { View, div, svg } from "gpui-kit";
 import { v_flex, h_flex, Editor, EditorState } from "gpui-base";

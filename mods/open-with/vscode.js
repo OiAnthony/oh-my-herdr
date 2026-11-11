@@ -1,3 +1,6 @@
+// Adapted from CacaoRick/herdr-open-vscode main.js, MIT; see LICENSE.open-vscode.
+// Modified by oh-my-herdr: injectable launch dependencies, strict host lookup,
+// Windows CLI-failure fallback, and open-with configuration paths.
 import { folderUri, protocolUrl, resolveHost } from "./uri.js";
 
 const ps = value => `'${value.replaceAll("'", "''")}'`;

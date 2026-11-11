@@ -1,0 +1,21 @@
+oh-my-herdr / Open With
+
+Project-original portions: Apache-2.0; see LICENSE.
+Imported/adapted code: MIT; see LICENSE.open-vscode.
+Copyright (c) 2026 CacaoRick
+
+Original project: https://github.com/CacaoRick/herdr-open-vscode
+Official Gallery: https://herdr.dev/mods/CacaoRick/herdr-open-vscode/
+Corresponding fixed revision: 1dfa20974f6da63b195660b68dd120bed2412184
+Original source: mods/open-vscode/uri.js and mods/open-vscode/main.js.
+Adapted files: uri.js, vscode.js, target.js, context.js and launch integration
+in main.js. Changes include machine-aware target capture, repository lookup,
+POSIX backslash preservation, Windows drive/UNC handling, strict SSH host
+overrides, CLI-failure fallback and integration into the Open With launcher.
+The fixed revision corroborates corresponding source/license, not an exact
+historical import commit. The original MIT notice remains in full locally.
+
+Artwork exceptions and changes: icons/NOTICE.txt.
+Cursor/Sublime artwork: CC0-1.0; icons/LICENSE.CC0-1.0.txt.
+Original neutral application and chevron artwork: Apache-2.0.
+No trademark rights or affiliation/endorsement are implied by these licenses.

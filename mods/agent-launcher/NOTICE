@@ -1,0 +1,20 @@
+oh-my-herdr / agent-launcher
+
+Project-original code and Herdr builtin adaptations: Apache-2.0; see LICENSE.
+
+Adapted files: main.js; launch.js
+Original source files, relative to defaults/mods/: new-menu/main.js
+Source: https://github.com/herdrdev/herdr-app
+Published source version: v0.1.14
+Fixed source revision: 2405bf388c568c3ed479f05b8e405ccfa44b3f2c
+Source license: https://github.com/herdrdev/herdr-app/blob/2405bf388c568c3ed479f05b8e405ccfa44b3f2c/LICENSE
+Changes by oh-my-herdr: Captured target, launch modes, picker, saved defaults and custom-command editor.
+Modified files carry change notices. The tagged source has no root NOTICE.
+
+Historical copies came from installed Herdr Desktop 0.1.14. The fixed tag
+provides corresponding original-source/license evidence, not a claim of
+byte-identical historical runtime imports or binary-source attestation.
+No affiliation or endorsement is implied; no trademark rights are granted.
+
+OMP artwork is separately MIT-licensed: icons/LICENSE.oh-my-pi.
+Fixed provenance: icons/SOURCE.oh-my-pi.txt.
