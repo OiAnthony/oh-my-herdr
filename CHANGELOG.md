@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Agents 列表隐藏 OMP 自动标题中品牌后方的重复状态符号，包含等待、需关注、静态分隔符及四种 spinner；状态保留在 Herdr 行尾。任务 emoji、正文、无品牌标题及手动命名的 tab 保持原样。
 - 新增 `⌘⇧E` 聚焦 Files、`⌘⇧G` 聚焦 Changes；对应面板已聚焦时再次按下隐藏并返回当前 pane。可见但未聚焦时只聚焦，在两个面板之间直接切换。新增 `professional-panels` 布局适配器，保留内置 0.1.14 面板源码和原生子控件，内置模块不变；纳入安装归属和快捷键恢复。Git Graph 文档示例改用 `⌘⌥G`，避免旧双击序列截获 Changes 快捷键。
 - Professional 右上角改为 Files、Changes、`+`、Open With 的顺序，将两个启动入口相邻放置；保留独立菜单、默认项和快捷键行为，并同步布局预览图。
 - Professional 新增基于内置 Agents 0.1.14 的 `agents-professional` 副本；OMP 配有图标时只移除自动标题的前导品牌 `π`，保留状态符号、任务 emoji、正文和手动命名的 tab。内置 Agents 不变，副本及布局引用纳入套件安装归属。

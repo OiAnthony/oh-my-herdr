@@ -47,7 +47,7 @@ HERDR_APP_HOME=/private/var/tmp/oh-my-herdr-app herdr-app do layout.switch '{"na
 | professional-status | `mods/professional-status/` | 布局适配器：机器、分支、agents、Git Graph 入口与命令面板提示 |
 | agent-launcher | `mods/agent-launcher/` | 启动菜单、按机器保存默认项、自定义命令编辑器 |
 | tabs-professional | `mods/tabs-professional/` | 标签栏适配器：标签管理、Files/Changes 和默认启动按钮 |
-| agents-professional | `mods/agents-professional/` | Agents 适配器：有 OMP 图标时去掉自动标题的品牌前缀，保留状态和任务文本 |
+| agents-professional | `mods/agents-professional/` | Agents 适配器：有 OMP 图标时去掉自动标题的品牌和重复状态前缀，保留任务文本 |
 | professional-panels | `mods/professional-panels/` | Files/Changes 适配器：保留原生面板内容，接收焦点并支持快捷键隐藏 |
 
 布局继续引用内置 `workspace-chrome` 和 `spaces`。这些模块由 Herdr 更新，不归套件管理。Files/Changes 使用 `professional-panels` 中从已安装 Herdr 0.1.14 复制的面板源码，图标仍引用内置 Files 资源。pane header 使用 `git-graph` 的 `pane-header` 角色，基于内置 `pane` 0.1.14 保留标题、状态及 split/zoom/close 操作，并为 diff 显示文件路径；宿主的原生 pane title 仍是只读值。其余适配器基于内置 `tabs`、`workspace-status`、`agents` 0.1.14；更新 Herdr 时需手动核对这些副本与官方模块的行为差异。
@@ -111,7 +111,7 @@ Professional 标签栏的主按钮显示当前机器的默认启动项，点击�
 
 OMP 图标直接取自 [oh-my-pi 官方仓库 v18.18.6](https://github.com/can1357/oh-my-pi/blob/v18.18.6/assets/icon.svg)，保留原始配色；资源随 `agent-launcher` 分发，MIT 许可和固定来源记录位于其 `icons/` 目录。注册图标仍属于个人程序表配置，安装器不会自动添加或覆盖该条目。
 
-Professional 的 Agents 列表使用自维护的 `agents-professional` 副本。当程序 key 为 `omp` 且配置了图标时，仅去掉自动终端标题开头的 `π` 及其分隔空白，保留后续状态符号、任务 emoji 和正文中的 `π`。没有图标、其他程序及手动命名的 tab 沿用原有行为；不修改终端原始标题。分组、优先级和置顶视图共用同一标题处理。首次从内置 Agents 切换时，若要保留本机状态计时，可在新副本启用前将 `data/agents/store.json` 复制到尚不存在的 `data/agents-professional/store.json`；安装器不管理这些运行状态。
+Professional 的 Agents 列表使用自维护的 `agents-professional` 副本。当程序 key 为 `omp` 且配置了图标时，去掉自动终端标题开头的 `π` 及紧随其后的已知状态分隔符，状态统一由 Herdr 行尾标识展示。按 OMP 18.18.7 的标题格式识别 `>`、`!`、静态 `:` 和 braille、pulse、dots、line 四种 spinner；也处理关闭标题状态后的 `π: 标题` 格式。只移除前缀中的一个状态符号，保留任务 emoji、未知符号和正文中的 `π`。没有品牌前缀、没有图标、其他程序及手动命名的 tab 沿用原有行为；不修改终端原始标题。分组、优先级和置顶视图共用同一标题处理。首次从内置 Agents 切换时，若要保留本机状态计时，可在新副本启用前将 `data/agents/store.json` 复制到尚不存在的 `data/agents-professional/store.json`；安装器不管理这些运行状态。
 
 ## 快捷键管理
 

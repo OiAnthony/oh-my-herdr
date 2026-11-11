@@ -1,8 +1,8 @@
 const clean = (s) => (s ?? "").replace(/^[^\p{L}\p{N}]+/u, "").trim();
 
 export function terminalTitle(value, program) {
-  // OMP already has a program icon; its remaining title is literal task text.
-  if (program?.key === "omp" && program.icon) return (value ?? "").replace(/^π(?:\s+|$)/u, "");
+  // OMP 18.18.7: strip the brand and one known state separator; Herdr shows status.
+  if (program?.key === "omp" && program.icon) return (value ?? "").replace(/^π(?::(?:\s+|$)|(?:\s+|$)(?:[>!:⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏○◔◑◕●⠁⠂⠄⠠⠐⠈|/\\-](?:\s+|$))?)/u, "");
   return clean(value);
 }
 
