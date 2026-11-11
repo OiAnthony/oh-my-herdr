@@ -19,6 +19,13 @@
       }
     },
     {
+      "name": "resource-monitor",
+      "source": "mods/resource-monitor",
+      "provenance": {
+        "origin": "Native read-only process-tree resources and TCP listener monitor; original workspace implementation."
+      }
+    },
+    {
       "name": "professional-status",
       "source": "mods/professional-status",
       "provenance": {

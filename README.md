@@ -1,6 +1,6 @@
 # oh-my-herdr
 
-一个包含布局、三个独立功能 Mods 和四个布局适配 Mods 的 Herdr Desktop 扩展项目。当前版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.14`。
+一个包含布局、四个独立功能 Mods 和四个布局适配 Mods 的 Herdr Desktop 扩展项目。当前发布版本为 `0.3.0`，目标运行版本为 Herdr Desktop `0.1.14`；下述 Resources 功能属于未发布修改。
 
 源码统一放在 `desktop/extensions/oh-my-herdr/`，项目内包含 `layouts/`、`mods/`、快捷键预设、安装脚本和文档。它不是单个带路由器的 Mod；运行时仍部署为 Herdr 原生的多个 Mod 目录。不修改 Herdr 本体、内置 Mods 或内置布局；安装器按绑定合并快捷键，不覆盖整份个人配置。
 
@@ -37,15 +37,16 @@ HERDR_APP_HOME=/private/var/tmp/oh-my-herdr-app herdr-app do layout.switch '{"na
 
 ## 组件与源码
 
-`oh-my-herdr.json` 是套件清单，记录版本、组件路径和来源。`open-with`、`git-graph`、`agent-launcher` 各自维护功能代码与资源，不互相导入。`professional-status` 负责状态栏组合，`tabs-professional` 负责标签栏和面板开关，`agents-professional` 负责 OMP 标题去重，`professional-panels` 为 Files/Changes 提供键盘焦点。运行时部署这七个 Mod，不增加统一路由或跨 Mod shared 包。
+`oh-my-herdr.json` 是套件清单，记录版本、组件路径和来源。`open-with`、`git-graph`、`agent-launcher`、`resource-monitor` 各自维护功能代码与资源，不互相导入。`professional-status` 负责状态栏组合，`tabs-professional` 负责标签栏和面板开关，`agents-professional` 负责 OMP 标题去重，`professional-panels` 为 Files/Changes 提供键盘焦点。运行时部署这八个 Mod，不增加统一路由或跨 Mod shared 包。
 
 | 组件 | 源码 | 用途 |
 | --- | --- | --- |
 | Professional | `layouts/professional/` | 自定义工作区布局和预览图 |
 | open-with | `mods/open-with/` | 选择本机应用打开当前仓库或目录；VS Code 支持 Remote - SSH |
 | git-graph | `mods/git-graph/` | Git 历史图、Manygit、详情、操作菜单与确认对话框 |
-| professional-status | `mods/professional-status/` | 布局适配器：机器、分支、agents、Git Graph 入口与命令面板提示 |
+| professional-status | `mods/professional-status/` | 布局适配器：机器、分支、agents、Git Graph、Resources 入口与命令面板提示 |
 | agent-launcher | `mods/agent-launcher/` | 启动菜单、按机器保存默认项、自定义命令编辑器 |
+| resource-monitor | `mods/resource-monitor/` | 按机器和终端归属展示 CPU、内存、子进程与 TCP 监听端口 |
 | tabs-professional | `mods/tabs-professional/` | 标签栏适配器：标签管理、Files/Changes 和默认启动按钮 |
 | agents-professional | `mods/agents-professional/` | Agents 适配器：有 OMP 图标时去掉自动标题的品牌和重复状态前缀，保留任务文本 |
 | professional-panels | `mods/professional-panels/` | Files/Changes 适配器：保留原生面板内容，接收焦点并支持快捷键隐藏 |
@@ -77,6 +78,29 @@ diff pane title 显示相对路径，完整标题可通过悬停查看。普通�
 每次读取都固定仓库、机器、commit 和文件，不随焦点改变；快速切换时，过期的异步结果不会覆盖新文件。未提交变更显示打开时读取的工作区内容。不创建终端或磁盘临时文件。预览状态由扩展管理，tab 仍按宿主规则保存和恢复，不依赖 Herdr 0.1.14 缺少的原生 preview-tab 标记。
 
 Graph 的 Changes 跳转只在布局显式提供绑定且目标与内置 Changes 一致时显示；独立 pane、异仓库或 Manygit 子仓库不会误跳到当前窗口的另一个仓库。
+
+## 查看子进程与监听端口
+
+安装包含未发布修改的套件后，在 Professional 底部状态栏点击 **Resources**。它打开应用内浮动面板，不改变布局。重复点击替换同名面板，不叠加采样实例；关闭按钮或 Esc 关闭并释放采样状态。此功能不需要配置文件、账号或常驻 helper。
+
+面板默认使用 Tree，展示全部 Spaces。当前 Space 置顶，自动展开到 Tab、Pane 和 Terminal/Agent，其他 Spaces 初始折叠。切换当前 Space 后，新 Space 置顶并展开；远端 Space 显示机器名前缀。展开终端可查看真实 OS 进程树、PID/PPID、根进程、前台进程和监听地址。无 pane 的子终端沿 Core 逻辑 parent 挂到同 tab 的父终端下；有 pane 的终端保留显式位置。资源归属仍只使用 OS PPID，逻辑父子关系不改变终端自身计量；上层分组按进程身份去重。
+
+- 默认内存降序，可切换名称、CPU 排序或筛选名称；当前 Space 始终置顶。筛选不改变分组原始总量。方向键移动及展开/折叠，Enter/空格切换展开，`/` 聚焦筛选；Tab 可进入筛选、排序、刷新间隔、刷新和关闭控件。
+- 活跃应用默认每 5 秒采样，顶部间隔菜单可选 1s、2s、5s、10s。修改间隔替换现有定时器，不叠加采样；选项仅在当前面板内保留。移除固定刷新提示和采样状态跳动，采样时间放在悬停提示中。主机内存和 macOS Footprint 最快每 10 秒更新。同机请求合并，最多并发两台机器。应用失活时不启动新命令；关闭后的已发出命令最多等待其 5 秒超时，结果不会写回。
+- CPU 以一个逻辑核心为 100%，可超过 100%。Unix 使用 `ps %CPU`，不代表严格刷新窗口；Windows 使用相邻快照累计 CPU 时间差，首次及过长间隔显示未知。进程数据与 Windows CPU 间隔的有效期取 10 秒和所选间隔加 5 秒中的较大值，容纳 10s 档位的采集耗时。
+- 主内存列、排序和最多 60 点趋势统一使用 Unix RSS 或 Windows Working Set。内存数值提示包含 macOS Footprint 及年龄；终端详情也显示整组 Footprint。Footprint 必须匹配启动身份且不超过 15 秒，整组缺一项就显示未知。RSS/WS 相加可能重复共享页。
+- 主机使用率单独计算，不用受管进程总和冒充主机占用。macOS 可用量来自 `memory_pressure` 系统百分比估计；Linux 使用 MemAvailable，Windows 使用可用物理内存。
+- TCP LISTEN 不是已验证 Web 服务。回环、所有接口、指定地址只说明绑定范围，不说明外部可达性。远端地址始终带机器名，不生成本机 localhost 链接，不请求 HTTP、不转发端口、不打开浏览器。
+
+| 平台适配 | 所需系统工具 | 运行验证 |
+| --- | --- | --- |
+| macOS | `ps`、`lsof`、`memory_pressure -Q`、`top` | 本机采集与子进程/端口归属已实测 |
+| Linux | `ps`、`ss`、`/proc/meminfo` | 解析回归通过，未做 Linux 端到端验证 |
+| Windows | PowerShell、CIM、`Get-NetTCPConnection` | 解析与 CPU 时间差回归通过，未做 Windows 端到端验证 |
+
+命令在资源所属机器按现有权限运行，不安装工具、不提权。缺工具、部分可见、失败、过期和离线分别显示；部分可见的监听显示已知端点数，不把它当完整总数。刷新失败时终端旧资源标为 stale，上层不将失败机器旧值计入实时资源。面板不读取 argv、环境变量或终端内容，不持久化资源数据，不提供结束进程按钮，也不能认领已脱离进程树的 daemon 或容器发布端口。
+
+设计与验收口径见 [资源监控实施方案](docs/resource-monitor-plan.md)。已在独立 app home 中核对原生 Tree 与 600×380 面板的刷新菜单截图；真实鼠标、键盘及滚动交互仍未完成，不能把静态检查或 Node 场景测试视作完整 UI 验收。
 
 ## 在新 tab 启动 Agent
 
@@ -212,10 +236,10 @@ Open With 在打开菜单或点击主按钮时固定目标。它从当前终端 
 
 源码到应用目录单向部署，不反向同步整个应用 home。不要提交生成类型、运行状态或个人配置。
 
-运行文件生命周期、Agents 标题、Agent Launcher、Open With 和 Graph 行内展开回归检查：
+运行文件生命周期、Agents 标题、Agent Launcher、Open With、Graph 行内展开和资源监控回归检查：
 
 ```sh
-node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/agents-professional.test.mjs desktop/extensions/oh-my-herdr/agent-launcher.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs desktop/extensions/oh-my-herdr/git-graph.test.mjs
+node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/agents-professional.test.mjs desktop/extensions/oh-my-herdr/agent-launcher.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs desktop/extensions/oh-my-herdr/git-graph.test.mjs desktop/extensions/oh-my-herdr/resource-monitor.test.mjs
 ```
 
 在隔离应用目录中安装并运行 `check`。要验证完整界面，还需要用独立的 `HERDR_APP_HOME` 和隔离 Core 会话启动真实应用；仅隔离应用 home 不代表 Core 终端和空间已隔离。
@@ -237,6 +261,15 @@ Git Graph 的上游版权与 MIT 文本随源码保留。Open With 品牌图标�
 ## 本机验证记录
 
 ### 未发布修改
+
+2026-11-11 Resources 隔离验证：
+
+- 资源模型、Unix/Windows 解析和安装器共 78 项测试通过。覆盖嵌套根、重复根冲突、跨机器同 PID、逻辑 parent、防环、PID 重用、socket 去重、未知值、stale、Footprint 和趋势上限。
+- `resource-monitor` 初始检查通过；自包含临时原生 fixture 用 50 个终端、500 个进程及两点趋势验证进程行、端口行和 PathBuilder 描述，`professional-status` 检查通过。fixture 不是实际鼠标交互证明。
+- macOS 真实场景通过：父子进程、两个独立监听归属、回环/通配绑定、退出后端点移除；888 条进程的该次快照中主机与 Footprint 可解析。20 次普通采样 p95 为 60 ms；首次 `top` 为 1542 ms，单独统计。Linux/Windows 与远端未做运行验收。
+- 使用独立 app home、Core session 和配置/状态目录安装了测试副本，未部署到日常应用。隔离应用能打开 Resources 且状态无错误，但系统截图工具报告没有活动显示器；应用原生截图仍是旧帧。因此未确认 Resources 的真实显示、鼠标/键盘、主题和窄窗口行为。
+- 可删除的 Node 面板生命周期场景通过：同机请求合并、失活暂停、根 PID 变化和关闭后的迟到结果不回写；重开 20 次后剩余 timer 为 0，关闭后观察 60 秒新增采样为 0。该场景使用测试调度/宿主边界，不代替真实应用交互验收。
+
 
 2026-11-10 右上角入口分组验证：
 

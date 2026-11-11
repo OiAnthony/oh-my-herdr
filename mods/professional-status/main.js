@@ -1,6 +1,6 @@
 import { View, div, svg } from "gpui-kit";
-import { h_flex } from "gpui-base";
-import { spaces, agents, theme, run, window, keys, layout, props } from "herdr";
+import { Button, h_flex } from "gpui-base";
+import { spaces, agents, theme, run, window, keys, layout, props, openOverlay } from "herdr";
 
 function findNode(node, id) {
   if (node?.id === id) return node;
@@ -55,6 +55,12 @@ export default class ProfessionalStatus extends View {
         .on_mouse_down("left", (_event, cx) => cx.stop_propagation())
         .on_click(() => this.toggleGraph())
         .child("Git Graph")))
+      .child(Button.new("professional-resources").h(22).px(6).flex_none().rounded(4)
+        .tab_index(0).accessibility_label("Resources").tooltip("Child processes and listening ports")
+        .text_color(t.muted).hover(button => button.bg(t.hover).text_color(t.foreground))
+        .on_mouse_down("left", (_event, cx) => cx.stop_propagation())
+        .on_click(() => openOverlay({ mod: "resource-monitor", kind: "window", key: "resource-monitor", keep: false, width: 0.8, height: 0.75 }))
+        .child("Resources"))
       .child(div().flex_1())
       .child(div().id("palette").text_color(t.dim).on_click(() => run("app.palette")).child(this.hint()));
   }
