@@ -2,6 +2,8 @@ import { View, div, svg, image } from "gpui-kit";
 import { Button, h_flex } from "gpui-base";
 import { spaces, panes, run, openOverlay, theme, window, shared, setShared, layout, settings, nextCommand, focused } from "herdr";
 
+const CHANGES_DOUBLE_PRESS_MS = 300;
+
 function find(node, id) {
   if (node?.id === id) return node;
   for (const child of node?.children ?? []) {
@@ -14,30 +16,69 @@ function find(node, id) {
 export default class Tabs extends View {
   init(_props, cx) {
     this.pressed = null;
+    this.changesPress = null;
     this.panels = JSON.parse(localStorage.getItem("panels") ?? "{}");
     cx.spawn(async cx => {
-      for (;;) {
-        const command = await nextCommand();
-        if (command === "launch-default") this.openLauncher("launch");
-        const child = command.endsWith("-files") ? "files" : command.endsWith("-changes") ? "changes" : null;
-        if (child && (command === `focus-${child}` || command === `toggle-${child}`)) {
-          const root = layout(), panel = find(root, "panel"), body = find(root, "panel-body");
-          if (!panel || !body) continue;
-          if (command === `toggle-${child}` && !panel.hidden && body.active === child) {
-            setShared("professional-panels.focus", null);
-            run("layout.hide", { id: "panel" });
-            const target = focused();
-            if (target?.pane) run("pane.focus", { pane: target.pane });
-            else if (target?.terminal) run("pane.focus", { terminal: target.terminal });
-          } else {
-            run("layout.select", { stack: "panel-body", child });
-            run("layout.show", { id: "panel" });
-            setShared("professional-panels.focus", child);
-          }
-        }
-      }
+      for (;;) this.handleCommand(await nextCommand(), cx);
     });
   }
+
+  cancelChanges() {
+    const pending = this.changesPress;
+    this.changesPress = null;
+    pending?.task.cancel();
+    return pending;
+  }
+
+  sameContext(pending) {
+    const target = focused();
+    return pending.layout === shared("layout") && pending.space === target?.space && pending.tab === target?.tab;
+  }
+
+  handleCommand(command, cx) {
+    if (command === "launch-default") { this.openLauncher("launch"); return; }
+    if (!["focus-files", "toggle-files", "toggle-changes"].includes(command)) return;
+    const previous = this.cancelChanges();
+    if (command.endsWith("-files") || !find(layout(), "graph-panel")) {
+      this.panelCommand(command);
+      return;
+    }
+    if (previous && this.sameContext(previous)) {
+      if (Date.now() - previous.at < CHANGES_DOUBLE_PRESS_MS) {
+        run("layout.toggle", { id: "graph-panel" });
+        return;
+      }
+      // A busy foreground executor must not extend the double-press deadline.
+      this.panelCommand(previous.command);
+    }
+    const target = focused();
+    const pending = { command, at: Date.now(), layout: shared("layout"), space: target?.space, tab: target?.tab };
+    this.changesPress = pending;
+    pending.task = cx.timer.after(CHANGES_DOUBLE_PRESS_MS, () => {
+      if (this.changesPress !== pending) return;
+      this.changesPress = null;
+      if (this.sameContext(pending)) this.panelCommand(command);
+    });
+  }
+
+  panelCommand(command) {
+    const child = command.endsWith("-files") ? "files" : "changes";
+    const root = layout(), panel = find(root, "panel"), body = find(root, "panel-body");
+    if (!panel || !body) return;
+    if (command === `toggle-${child}` && !panel.hidden && body.active === child) {
+      setShared("professional-panels.focus", null);
+      run("layout.hide", { id: "panel" });
+      const target = focused();
+      if (target?.pane) run("pane.focus", { pane: target.pane });
+      else if (target?.terminal) run("pane.focus", { terminal: target.terminal });
+    } else {
+      run("layout.select", { stack: "panel-body", child });
+      run("layout.show", { id: "panel" });
+      setShared("professional-panels.focus", child);
+    }
+  }
+
+  close() { this.cancelChanges(); }
 
   openLauncher(action) {
     openOverlay({ mod: "agent-launcher", kind: "popup", width: 250, height: 512, props: { action } });

@@ -149,15 +149,18 @@ Professional 的 Agents 列表使用自维护的 `agents-professional` 副本。
 | `⌘G` | `open-with.open-default`，使用默认应用打开当前仓库或目录 | `mod.open:open-vscode`、`open-with.open-default` 或未绑定 |
 | `⌘⇧A` | `tabs-professional.launch-default`，在新 tab 启动默认项 | `tabs-professional.launch-default` 或未绑定 |
 | `⌘⇧E` | 显示并聚焦 Files；Files 已聚焦时隐藏右侧面板 | 未绑定或已匹配目标 |
-| `⌘⇧G` | 显示并聚焦 Changes；Changes 已聚焦时隐藏右侧面板 | 未绑定或已匹配目标 |
+| `⌘⇧G` | 切换 Changes 显示状态；打开时聚焦，已显示时隐藏，不受焦点位置影响 | 未绑定、旧 `tabs-professional.focus-changes` 或已匹配目标 |
+| `⌘⇧G ⌘⇧G`（间隔小于 300ms） | 在 Professional 中切换 Git Graph 显示状态 | 由单次命令计时；旧原生序列需未绑定或为 `layout.toggle:graph-panel` |
 
-关闭 pane 会结束它的终端；如果它是 tab 中最后一个 pane，Herdr 仍会关闭该 tab。预设管理表中的 `global` 绑定，以及 `mod:professional-panels` 中的 `⌘⇧E / ⌘⇧G`；不清除其他位置的 `tab.close`，也不覆盖更高优先级的个人 `terminal` 或布局绑定。
+关闭 pane 会结束它的终端；如果它是 tab 中最后一个 pane，Herdr 仍会关闭该 tab。预设管理表中的 `global` 绑定、`mod:professional-panels` 中的 `⌘⇧E / ⌘⇧G`，并清除 `layout:Professional` 和 `mod:professional-panels` 中的旧原生双次序列；不清除其他位置的 `tab.close`，也不覆盖更高优先级的个人 `terminal` 绑定。
 
 `⌘G` 与 Open With 右上角主按钮共用启动逻辑，不弹出选择菜单。它在每次触发时读取默认应用和当前目标；远程目录仍只使用 VS Code。该命令需要当前布局显示 Open With 的 `props.role: "launcher"` 实例；Professional 已包含此入口。菜单实例不监听该命令，避免菜单与主按钮重复启动。
 
 `⌘⇧A` 需要当前布局包含 `tabs-professional` 实例，Professional 已提供。只有标签栏监听命令；菜单不会重复监听或创建第二个 tab。切换到不包含该标签栏的布局后，此快捷键不提供启动行为。
 
-`⌘⇧E / ⌘⇧G` 需要 `tabs-professional` 与 `professional-panels`，Professional 已包含。面板可见但键盘焦点在终端时，按键只聚焦，不隐藏；面板内的文件预览或提交输入框也算聚焦。在 Files 与 Changes 之间切换时直接聚焦另一面板；隐藏后回到当前终端或 pane。焦点交接使用一次性的 `professional-panels.focus` shared 值，面板接收后清空。右上角鼠标按钮仍按可见状态切换，并保留原有的按 space 恢复行为。
+`⌘⇧E / ⌘⇧G` 需要 `tabs-professional` 与 `professional-panels`，Professional 已包含。Files 可见但键盘焦点在终端时，`⌘⇧E` 只聚焦，不隐藏；Files 内的文件预览也算聚焦。`⌘⇧G` 按 Changes 是否显示进行切换，即使焦点已回到终端，单次按键也会隐藏已显示的 Changes。当前显示 Files 时，单次 `⌘⇧G` 切换到 Changes 并聚焦；隐藏后回到当前终端或 pane。焦点交接使用一次性的 `professional-panels.focus` shared 值，面板接收后清空。右上角鼠标按钮仍按可见状态切换，并保留原有的按 space 恢复行为。
+
+`⌘⇧G` 由 `tabs-professional` 统一计时：单次等待 300ms 后切换 Changes；间隔小于 300ms 的第二次 `⌘⇧G` 取消单次操作并切换 Git Graph，保留右侧 Files/Changes 的状态。两种操作都在再次触发时隐藏对应面板。终端和 Files/Changes 面板的按键都交给同一实例，避免焦点切换打断判定。两次按键之间可以松开修饰键。切换 space、tab 或布局后不执行原先待处理的操作；`⌘⇧E` 立即执行并取消待处理的 Changes。宿主原生序列固定等待 1 秒，因此此处不注册原生双次序列。
 
 每项规则包含 `section`、`key`、`from` 和 `to`。`from` 是首次接管时允许替换的旧命令，`to` 是目标命令；两者使用字符串，`null` 表示未绑定。未绑定或已匹配目标的按键也可接管。其他个人绑定（包括带参数的命令对象）保留；发生实际修改时，安装器会重新格式化整份 JSON。
 
@@ -169,7 +172,7 @@ Professional 的 Agents 列表使用自维护的 `agents-professional` 副本。
 
 遇到冲突时，按错误中的 section 和按键检查个人配置。若要由套件管理，先备份，再把该项改回 `.oh-my-herdr/installed.json` 中对应的 `after` 值（`null` 表示移除该项）；首次安装则改为表中接受的值，然后重新运行 `install`。没有强制覆盖选项。
 
-Git Graph 的个人快捷键不在预设内，可在应用目录的 `keys.json` 中合并以下区块。仅在 Professional 布局中，`⌘⌥G` 切换 Git Graph 的显示与隐藏，不占用 Files/Changes 的按键。
+Git Graph 的双次 `⌘⇧G` 已由预设管理。若还需要独立的显示/隐藏按键，可在应用目录的 `keys.json` 中保留或合并以下个人区块。仅在 Professional 布局中，`⌘⌥G` 切换 Git Graph 的显示与隐藏。
 
 ```json
 "layout:Professional": {
@@ -177,7 +180,7 @@ Git Graph 的个人快捷键不在预设内，可在应用目录的 `keys.json` 
 }
 ```
 
-若此前使用 `cmd-shift-g cmd-shift-g` 的 Git Graph 示例，先移除旧序列，改用上述绑定。旧序列会截获单次 `⌘⇧G`，安装器不删除个人序列绑定。
+若此前使用 `cmd-shift-g cmd-shift-g` 的 `layout.toggle:graph-panel` 示例，安装器会将该项纳管并移除；已受管的 `layout.show:graph-panel` 序列也会移除，避免叠加宿主的 1 秒等待。卸载时恢复安装前的原值。其他个人序列命令仍按冲突规则保留。
 
 `keys.json` 自定义后不会自动合入新版默认快捷键，后续新增默认绑定需要手动合并。
 
@@ -240,7 +243,7 @@ Open With 在打开菜单或点击主按钮时固定目标。它从当前终端 
 运行文件生命周期、Agents 标题、Agent Launcher、Open With、Graph 行内展开和资源监控回归检查：
 
 ```sh
-node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/agents-professional.test.mjs desktop/extensions/oh-my-herdr/agent-launcher.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs desktop/extensions/oh-my-herdr/git-graph.test.mjs desktop/extensions/oh-my-herdr/resource-monitor.test.mjs
+node --test desktop/extensions/oh-my-herdr/oh-my-herdr.test.mjs desktop/extensions/oh-my-herdr/tabs-professional.test.mjs desktop/extensions/oh-my-herdr/agents-professional.test.mjs desktop/extensions/oh-my-herdr/agent-launcher.test.mjs desktop/extensions/oh-my-herdr/open-with.test.mjs desktop/extensions/oh-my-herdr/git-graph.test.mjs desktop/extensions/oh-my-herdr/resource-monitor.test.mjs
 ```
 
 在隔离应用目录中安装并运行 `check`。要验证完整界面，还需要用独立的 `HERDR_APP_HOME` 和隔离 Core 会话启动真实应用；仅隔离应用 home 不代表 Core 终端和空间已隔离。

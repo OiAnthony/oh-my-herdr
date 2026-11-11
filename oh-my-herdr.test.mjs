@@ -447,6 +447,24 @@ test("matching personal shortcuts are adopted without inventing defaults or rewr
   assert.equal(await fs.readFile(join(home, "keys.json"), "utf8"), original);
 });
 
+test("shipped Changes commands replace native Graph sequences and restore them on uninstall", async t => {
+  const { sourceRoot, home, options } = await fixture(t);
+  const preset = await fs.readFile(new URL("./keybindings.json", import.meta.url), "utf8");
+  await put(sourceRoot, "keybindings.json", preset);
+  await install(home, options);
+  const keys = JSON.parse(await fs.readFile(join(home, "keys.json")));
+  assert.equal(keys.global["cmd-shift-g"], "tabs-professional.toggle-changes");
+  assert.equal(keys["mod:professional-panels"]["cmd-shift-g"], "tabs-professional.toggle-changes");
+  for (const section of ["layout:Professional", "mod:professional-panels"]) {
+    assert.equal(Object.hasOwn(keys[section], "cmd-shift-g cmd-shift-g"), false);
+  }
+  await check(home, { ...options, runCheck: async () => ({}) });
+  await uninstall(home);
+  assert.deepEqual(JSON.parse(await fs.readFile(join(home, "keys.json"))), {
+    ...defaultKeys, "mod:professional-panels": {},
+  });
+});
+
 test("absent bindings are restored as absent rather than default bindings", async t => {
   const { home, options } = await fixture(t);
   await put(home, "keys.json", '{"terminal":{"cmd-c":"terminal.copy"}}');
