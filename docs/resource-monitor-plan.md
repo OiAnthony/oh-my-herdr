@@ -15,7 +15,7 @@
 
 ## 2. 功能范围
 
-**默认以 Space → Tab → Pane → Terminal/Agent → OS 进程树展示全部 Spaces。** 当前 Space 置顶展开，其他 Spaces 初始折叠；远端 Space 带机器名前缀。同一 Agent 内部通过普通子进程启动的工具和服务，也属于统计范围。
+**默认以 Space → Tab → Pane → OS 进程树展示全部 Spaces。** 承载终端的 Pane 与终端合并显示，统一使用 Pane，不区分 Agent 和 Terminal。当前 Space 置顶展开，其他 Spaces 初始折叠；远端 Space 带机器名前缀。同一终端内部通过普通子进程启动的工具和服务，也属于统计范围。
 
 | 能力 | 交付行为 |
 | --- | --- |
@@ -86,9 +86,11 @@ flowchart LR
 
 `mods/resource-monitor/main.js` 管理筛选、排序、展开项、采样调度和异步结果。按现有 `View`、`cx.spawn`、`cx.timer` 模式实现，渲染与虚拟行回调中不执行系统命令。
 
-默认展示全部 Spaces，不提供当前/全部范围开关。当前 Space 置顶，展开到 Tab、Pane 和 Terminal/Agent；其他 Spaces 初始折叠。当前 Space 变化后，新 Space 置顶并展开。有 pane 的终端位于对应 Pane 下，无 pane 的子终端位于同 tab 的逻辑父终端下；跨 tab 的显式归属不因 parent 改变。逻辑父子关系只影响展示，上层分组仍按进程身份去重，终端自身资源仍按 OS PPID 独立计量。未归入已知 space/tab 的记录放到该机器的未归属分组，不伪造关联。
+默认展示全部 Spaces，不提供当前/全部范围开关。当前 Space 置顶，展开到 Tab 和 Pane；其他 Spaces 初始折叠。当前 Space 变化后，新 Space 置顶并展开。有 pane 的终端与其 Pane 合为一行，无 pane 的子终端位于同 tab 的逻辑父终端下，同样显示为 Pane；非终端 Pane 保留独立行，跨 tab 的显式归属不因 parent 改变。逻辑父子关系只影响展示，上层分组仍按进程身份去重，合并行使用终端自身按 OS PPID 独立计量的资源。未归入已知 space/tab 的记录放到该机器的未归属分组，不伪造关联。
 
-顶部使用紧凑工具栏，刷新间隔选项为 1s、2s、5s、10s，默认 5s。选择后替换当前定时器，不叠加，也不持久化选项。不显示固定刷新提示和跳动的采样状态，采样时间保留在悬停提示。面板保留手动刷新、关闭、Esc、名称筛选与内存/CPU/名称排序；当前 Space 不参与其他 Spaces 的排序，始终置顶。长列表使用原生虚拟列表，颜色来自 `theme()`。
+顶部使用紧凑工具栏，刷新间隔选项为 1s、2s、5s、10s，默认 5s。选择后替换当前定时器，不叠加，也不持久化选项。不显示固定刷新提示和跳动的采样状态，采样时间保留在悬停提示。面板提供展开全部、收起全部、手动刷新、关闭、Esc 与内存/CPU/名称排序；当前 Space 不参与其他 Spaces 的排序，始终置顶。长列表使用原生虚拟列表，颜色来自 `theme()`。
+
+搜索分为名称/地址、PID 和端口三个输入项，条件同时生效；名称包含进程名，PID 与 TCP 监听端口精确匹配，组合 PID/端口要求同一进程命中。搜索自动展开命中路径，手动折叠和收起全部仍有效。端口搜索复用当前已采集的机器快照，保留进程链、PID/PPID、监听地址及 Pane 归属；未归属 Pane 的监听进程放在对应机器的 Other processes 下。采集失败、权限不足或快照未就绪时提示覆盖不完整，无匹配不表示端口空闲。展示投影、过滤和行展开由纯模块 `mods/resource-monitor/tree.js` 负责，不改变模型资源归属或额外扫描端口。
 
 ### 4.3 采样模块只产生标准化机器快照
 
@@ -210,6 +212,7 @@ macOS/Linux 的主内存列固定显示 RSS，Windows 固定显示 Working Set�
 | --- | --- |
 | `mods/resource-monitor/main.js` | 新建原生面板、交互和采样生命周期 |
 | `mods/resource-monitor/model.js` | 新建身份、树、归属、聚合与端点去重逻辑 |
+| `mods/resource-monitor/tree.js` | Pane 展示合并、组合搜索、端口占用结果和可展开行 |
 | `mods/resource-monitor/collect.js` | 新建三平台采样与结果标准化 |
 | `mods/resource-monitor/mod.json` | 新建 metadata，`place: "none"`，标题 Resources |
 | `mods/professional-status/main.js` | 新增 Resources 入口，不承担采样 |
@@ -331,3 +334,10 @@ Orca 参考固定到 commit `12e809c7556e49bb513b9f009695a9523c088a9e`：
 - 未部署到日常 app home，未切换日常布局或重启现有服务。临时应用与验证脚本在验证后清理。
 
 实现细节差异：Linux 使用 `ss -H -ltnpe` 多取 inode 以识别共享 socket；失败终端保留 stale 旧值，上层实时小计排除失败资源；macOS lsof 一律标为权限范围内的部分可见。发布前仍需补齐上述未完成的运行与 UI 验收。
+
+2026-11-11 Pane 合并与搜索调整验证（Herdr Desktop 0.1.15）：
+
+- 资源与安装器测试共 85 项通过。新增覆盖 Pane 展示合并、名称/进程名查询、PID/端口同进程组合匹配、父进程链、未归属监听进程、跨机器同 PID 隔离，以及筛选不改变原始资源总量。
+- Mod 初始检查及隔离原生 fixture 检查通过，fixture 执行搜索时展开/收起回调，并检查三项输入框及全部结果行的原生元素描述。Node 回调场景验证异步采样后自动展开命中路径，手动折叠及收起全部可跨刷新保持。
+- macOS 临时回环监听实测通过：查到 PID 与端口、验证 Pane 归属及未归属结果，关闭监听后结果消失；监听覆盖为 partial。临时监听已关闭，未部署到日常 app home。
+- 桌面工具报告辅助功能与录屏权限 denied，本次未完成新工具栏的真实鼠标、键盘和视觉验收。原生检查及回调场景不能替代真实交互；Linux/Windows 与远端端到端仍未验收。

@@ -4,7 +4,8 @@
 
 - Agents 列表隐藏 OMP 自动标题中品牌后方的重复状态符号，包含等待、需关注、静态分隔符及四种 spinner；状态保留在 Herdr 行尾。任务 emoji、正文、无品牌标题及手动命名的 tab 保持原样。
 - 新增独立只读 `resource-monitor`：Professional 状态栏 Resources 入口打开浮动面板，展示机器/空间/标签/终端分组、真实子进程树、CPU、RSS/Working Set、macOS Footprint、内存趋势和 TCP 监听端点。嵌套根与共享 socket 去重，未知/部分/过期状态明确标注；应用失活暂停采集，关闭释放调度并忽略迟到结果。提供 macOS/Linux/Windows 采样适配，当前仅 macOS 采集与归属实测，Linux/Windows 及真实 UI 交互未验收。纳入安装器归属，不改上游本体、布局或快捷键，不安装 helper、探测 HTTP 或结束用户进程。
-- Resources 默认以 Tree 展示全部 Spaces，当前 Space 置顶展开，不再提供当前/全部范围开关。补充 Pane 层级、Agent 标识及同 tab 无 pane 子终端的逻辑父子关系，保留 OS 资源独立计量与分组去重。顶部刷新间隔可选 1s/2s/5s/10s，默认 5s；压缩工具栏并移除固定刷新提示及采样状态跳动，10s 档位同步调整数据与 Windows CPU 有效期。
+- Resources 默认以 Tree 展示全部 Spaces，当前 Space 置顶展开，不再提供当前/全部范围开关。承载终端的 Pane 与终端合为一行，统一显示 Pane，不区分 Agent 和 Terminal；保留非终端 Pane、同 tab 无 pane 子终端的逻辑父子关系、OS 资源独立计量与分组去重。顶部刷新间隔可选 1s/2s/5s/10s，默认 5s；压缩工具栏并移除固定刷新提示及采样状态跳动，10s 档位同步调整数据与 Windows CPU 有效期。
+- Resources 新增展开全部、收起全部按钮；搜索拆分为名称/地址、PID 和端口，支持条件组合、进程名搜索及精确 PID/端口匹配。端口结果保留所属 Pane、进程链和监听地址，并覆盖现有快照中未归属 Pane 的监听进程；采集覆盖不完整时显示提示。
 - 新增 `⌘⇧E` 聚焦 Files、`⌘⇧G` 聚焦 Changes；对应面板已聚焦时再次按下隐藏并返回当前 pane。可见但未聚焦时只聚焦，在两个面板之间直接切换。新增 `professional-panels` 布局适配器，保留内置 0.1.14 面板源码和原生子控件，内置模块不变；纳入安装归属和快捷键恢复。Git Graph 文档示例改用 `⌘⌥G`，避免旧双击序列截获 Changes 快捷键。
 - Professional 右上角改为 Files、Changes、`+`、Open With 的顺序，将两个启动入口相邻放置；保留独立菜单、默认项和快捷键行为，并同步布局预览图。
 - Professional 新增基于内置 Agents 0.1.14 的 `agents-professional` 副本；OMP 配有图标时只移除自动标题的前导品牌 `π`，保留状态符号、任务 emoji、正文和手动命名的 tab。内置 Agents 不变，副本及布局引用纳入套件安装归属。

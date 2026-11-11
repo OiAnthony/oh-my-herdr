@@ -3,6 +3,7 @@ import { Button, Input, InputState, Popover, Scrollbar, VirtualListScrollHandle,
 import { agents, closeOverlay, exec, focused, machines, panes, props, spaces, terminals, theme, window as appWindow } from "herdr";
 import { createCollector } from "./collect.js";
 import { buildResources, MemoryHistory } from "./model.js";
+import { buildResourceTree, resourceRows } from "./tree.js";
 
 const ROW = 32;
 const LIST = "resource-monitor-rows";
@@ -39,15 +40,22 @@ export default class ResourceMonitor extends View {
     this.interval = 5;
     this.intervalOpen = false;
     this.selected = null;
+    this.revealSearch = false;
     this.now = Date.now();
-    this.inputFocused = false;
+    this.focusedInputs = new Set();
     this.signature = null;
     this.handle = cx.focus_handle();
     this.scroll = VirtualListScrollHandle.new();
-    this.filter = InputState.new({ placeholder: "Filter names or terminal addresses" });
-    this.filter.on("change", (_e, cx) => { this.flatten(); cx.notify(); });
-    this.filter.on("focus", () => { this.inputFocused = true; });
-    this.filter.on("blur", () => { this.inputFocused = false; });
+    this.filters = {
+      name: InputState.new({ placeholder: "Name / address" }),
+      pid: InputState.new({ placeholder: "PID" }),
+      port: InputState.new({ placeholder: "Port" })
+    };
+    for (const [name, input] of Object.entries(this.filters)) {
+      input.on("change", (_e, cx) => { this.flatten(true); cx.notify(); });
+      input.on("focus", () => { this.focusedInputs.add(name); });
+      input.on("blur", () => { this.focusedInputs.delete(name); });
+    }
     this.currentSpace = focused()?.space ?? spaces().find(s => s.active)?.id ?? null;
     this.handle.focus();
     this.refresh(cx);
@@ -74,7 +82,7 @@ export default class ResourceMonitor extends View {
     this.snapshots.clear();
     this.handle?.release();
     this.scroll?.release();
-    this.filter?.release();
+    for (const input of Object.values(this.filters ?? {})) input.release();
   }
 
   rebuild() {
@@ -184,29 +192,27 @@ export default class ResourceMonitor extends View {
     }
   }
 
-  flatten() {
-    const query = this.filter.value().trim().toLowerCase();
-    const compare = (a, b) => Number(b.kind === "space" && b.space === this.currentSpace) - Number(a.kind === "space" && a.space === this.currentSpace)
-      || (this.sort === "name" ? a.name.localeCompare(b.name) : (b[this.sort] ?? -1) - (a[this.sort] ?? -1) || a.name.localeCompare(b.name));
-    const matches = node => `${node.name} ${node.id}`.toLowerCase().includes(query) || (node.children ?? []).some(matches);
-    const rows = [];
-    const walk = (node, depth) => {
-      if (query && !matches(node)) return;
-      rows.push({ id: node.id, type: "node", node, depth });
-      if (!query && !this.expanded.has(node.id)) return;
-      for (const child of [...(node.children ?? [])].sort(compare)) walk(child, depth + 1);
-      if (node.kind !== "terminal") return;
-      rows.push({ id: `${node.id}:detail`, type: "detail", node, depth: depth + 1 });
-      for (const process of node.processes ?? []) {
-        rows.push({ id: `${node.id}:pid:${process.pid}`, type: "process", node, process, depth: depth + 1 + (process.depth ?? 0) });
-        for (const port of (node.ports ?? []).filter(p => p.pids.includes(process.pid))) {
-          rows.push({ id: `${node.id}:port:${process.pid}:${port.family}:${port.address}:${port.port}`, type: "port", node, port, depth: depth + 2 + (process.depth ?? 0) });
-        }
-      }
-    };
-    for (const node of this.nodes.flatMap(machine => machine.children).sort(compare)) walk(node, 0);
-    this.rows = rows;
-    if (!rows.some(row => row.id === this.selected)) this.selected = rows[0]?.id ?? null;
+  flatten(reveal = false) {
+    const filters = Object.fromEntries(Object.entries(this.filters).map(([name, input]) => [name, input.value().trim()]));
+    this.searching = Object.values(filters).some(Boolean);
+    this.portSearch = Boolean(filters.port);
+    if (reveal) this.revealSearch = this.searching;
+    this.tree = buildResourceTree(this.nodes, { filters, snapshots: this.snapshots });
+    if (reveal || (this.searching && this.revealSearch)) {
+      const visit = node => { this.expanded.add(node.id); node.children.forEach(visit); };
+      this.tree.forEach(visit);
+    }
+    this.rows = resourceRows(this.tree, { expanded: this.expanded, sort: this.sort, currentSpace: this.currentSpace });
+    if (!this.rows.some(row => row.id === this.selected)) this.selected = this.rows[0]?.id ?? null;
+  }
+
+  expandAll(open, cx) {
+    this.revealSearch = false;
+    this.expanded.clear();
+    this.flatten(open);
+    this.handle.focus();
+    if (this.rows.length) this.scroll.scroll_to_item(0);
+    cx.notify();
   }
 
   activate(id, cx) {
@@ -214,6 +220,7 @@ export default class ResourceMonitor extends View {
     if (!row) return;
     this.selected = id;
     if (row.type === "node") {
+      this.revealSearch = false;
       if (this.expanded.has(id)) this.expanded.delete(id);
       else this.expanded.add(id);
       this.flatten();
@@ -230,7 +237,7 @@ export default class ResourceMonitor extends View {
       return;
     }
     if (this.intervalOpen) return;
-    if (this.inputFocused || event.modifiers.control || event.modifiers.platform || event.modifiers.alt) return;
+    if (this.focusedInputs.size || event.modifiers.control || event.modifiers.platform || event.modifiers.alt) return;
     const index = this.rows.findIndex(row => row.id === this.selected);
     if (event.key === "down" || event.key === "up") {
       const next = Math.min(Math.max(0, index + (event.key === "down" ? 1 : -1)), this.rows.length - 1);
@@ -240,11 +247,12 @@ export default class ResourceMonitor extends View {
     else if (event.key === "right" || event.key === "left") {
       const row = this.rows[index];
       if (row?.type === "node") {
+        this.revealSearch = false;
         if (event.key === "right") this.expanded.add(row.id);
         else this.expanded.delete(row.id);
         this.flatten();
       }
-    } else if (event.key === "/") this.filter.focus();
+    } else if (event.key === "/") this.filters.name.focus();
     else return;
     cx.stop_propagation();
     cx.notify();
@@ -314,13 +322,13 @@ export default class ResourceMonitor extends View {
     const snapshot = this.snapshots.get(node.machine ?? "");
     const fresh = snapshot?.processes.state === "ready" || snapshot?.processes.state === "partial";
     const warning = node.unknown ? ` · ${node.unknown} unknown` : "";
-    const kind = node.kind === "terminal" ? node.agent ? "Agent" : "Terminal" : node.kind[0].toUpperCase() + node.kind.slice(1);
+    const kind = node.kind === "terminal" ? "Pane" : node.kind === "process-owner" ? "Process" : node.kind[0].toUpperCase() + node.kind.slice(1);
     const title = `${node.kind === "space" && node.machine ? `${clean(node.machine)} / ` : ""}${clean(node.name)}${warning}${node.stale ? " · stale" : ""}`;
     return base.cursor_pointer()
       .child(h_flex().flex_1().min_w(200).pl(row.depth * 14).gap(6).items_center()
         .child(icon(this.expanded.has(node.id) ? "chevron-down" : "chevron-right").text_color(t.muted))
         .child(div().flex_none().text_size(10).text_color(t.muted).child(kind))
-        .child(div().min_w(0).truncate().tooltip(`${title}${node.address ? ` · ${node.address}` : ""}${node.parent ? ` · Core parent: ${node.parent}` : ""}${node.message ? ` · ${clean(node.message)}` : ""}`).child(title))
+        .child(div().min_w(0).truncate().tooltip(`${title}${node.pane ? ` · Pane: ${clean(node.paneName ?? node.name)} (${node.pane})` : ""}${node.address ? ` · ${node.address}` : ""}${node.parent ? ` · Core parent: ${node.parent}` : ""}${node.message ? ` · ${clean(node.message)}` : ""}`).child(title))
         .when(Boolean(node.status), el => el.child(div().flex_none().text_size(10).text_color(t.muted).child(clean(node.status)))))
       .child(value(cpu(node.cpu), 78).text_color(fresh ? t.foreground : t.muted))
       .child(value(bytes(node.memory), 106).text_color(fresh ? t.foreground : t.muted)
@@ -353,17 +361,25 @@ export default class ResourceMonitor extends View {
       .on_key_down((e, cx) => this.key(e, cx))
       .child(h_flex().px(12).h(38).flex_none().gap(6).items_center()
         .child(div().flex_1().min_w(0).font_semibold().text_size(13).tooltip("Tree · Read-only resource monitor").child("Resources · Tree"))
+        .child(this.button("resource-expand-all", "Expand all", (_e, cx) => this.expandAll(true, cx)))
+        .child(this.button("resource-collapse-all", "Collapse all", (_e, cx) => this.expandAll(false, cx)))
         .child(this.intervalControl(t))
         .child(this.button("resource-refresh", "Refresh", (_e, cx) => { this.refresh(cx); cx.notify(); })
           .tooltip(paused ? "Sampling is paused while the app is inactive" : "Refresh resources now"))
         .child(this.button("resource-close", "Close", () => closeOverlay(this.overlay))))
       .child(h_flex().px(12).pb(6).gap(6).items_center().flex_none().on_mouse_down("left", (_e, cx) => cx.stop_propagation())
-        .child(Input.new(this.filter).flex_1().min_w(100).h(28).px(8).rounded(5).border_1().border_color(t.input).bg(t.background).text_color(t.foreground)
-          .accessibility_label("Filter resource names"))
+        .children(Object.entries(this.filters).map(([name, input]) =>
+          div().when(name === "name", el => el.flex_1().min_w(80))
+            .when(name !== "name", el => el.w(64).flex_none())
+            .tooltip(name === "name" ? "Pane, process, space or tab name; pane ID or terminal address" : name === "pid" ? "Exact PID; combined with other filters" : "Exact TCP listening port; includes collected processes outside panes")
+            .child(Input.new(input).w_full().h(28).px(8).rounded(5).border_1().border_color(t.input).bg(t.background).text_color(t.foreground)
+              .accessibility_label(name === "name" ? "Filter names or addresses" : name === "pid" ? "Filter exact process ID" : "Filter exact TCP listening port"))))
         .children(["name", "cpu", "memory"].map(sort => this.button(`resource-sort-${sort}`, sort === "cpu" ? "CPU" : sort === "name" ? "Name" : "Memory", (_e, cx) => {
           this.sort = sort; this.flatten(); cx.notify();
         }, this.sort === sort).tooltip(`Sort by ${sort}`))))
       .child(v_flex().px(12).pb(6).gap(3).flex_none().children(hostRows))
+      .when(this.portSearch, el => el.child(div().px(12).pb(6).text_size(11).text_color(t.muted)
+        .child(`Port search · Collected TCP listeners${[...this.snapshots.values()].some(snapshot => snapshot.listeners?.state !== "ready") || !this.snapshots.size ? " · Coverage incomplete or unavailable" : ""}`)))
       .child(div().id("resource-horizontal").flex_1().min_h(0).min_w(0).overflow_x_scrollbar()
         .on_mouse_down("left", (_e, cx) => cx.stop_propagation())
         .child(v_flex().min_w(800).w_full().h_full()
@@ -375,7 +391,7 @@ export default class ResourceMonitor extends View {
             .child(div().w(72).flex_none().text_right().child("Listeners"))
             .child(div().w(64).flex_none().text_right().child("Memory")))
           .when(this.rows.length > 0, el => el.child(list))
-          .when(!this.rows.length, el => el.child(div().p(24).text_color(t.muted).child(this.filter.value().trim() ? "No matching terminals" : "No running terminals in this scope")))))
+          .when(!this.rows.length, el => el.child(div().p(24).text_color(t.muted).child(this.searching ? "No matching resources in collected data" : "No running panes in this scope")))))
       .child(div().px(12).py(4).flex_none().text_size(11).text_color(t.muted)
         .child("Read-only · Listening ports are not verified web services · Shared pages may repeat in RSS/WS"));
   }
