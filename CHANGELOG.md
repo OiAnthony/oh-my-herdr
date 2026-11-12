@@ -1,116 +1,120 @@
 # Changelog
 
+## Unreleased
+
+- Make the default README, Gallery recipe, and supporting documentation English-first. Add `README.zh-CN.md` with language-switch links between the English and Simplified Chinese READMEs, and include both READMEs in release ZIPs.
+
 ## 0.4.0 — 2026-11-12
 
-- 新增 macOS arm64/x64 白名单 ZIP 打包与双原生架构 GitHub Actions，包含预编译资源 helper、官方固定 Node.js 26.13.1、完整 Node/依赖许可及最终 SHA256SUMS；不提交二进制，不使用 DMG、签名、公证或自动更新服务。
-- `install.sh` 不再调用 Cargo。发布包仅使用私有 `runtime/node`，损坏时明确失败，不回退到全局 Node、不下载依赖或现场编译；源码开发者先显式运行 helper 构建脚本。安装前校验架构、包内容、可执行 helper、Herdr 与初始化 home，复用原有归属、事务、快捷键恢复和冲突保护。
-- 新增 `--check` 与 `--uninstall` 私有运行时入口；更新为下载新版 ZIP 后重新安装。默认不切换布局、不重启，只有 `--switch` 显式启用。文档说明 macOS 13.5 下限、未签名安全提示及 Git/编辑器/Agent 的独立运行依赖。
-- macOS arm64 实际构建最终 ZIP；87 项既有安装器/Open With/图标测试与 17 项最终包消费边界测试通过。解压到含空格和中文的路径，使用真实私有 Node 26.13.1、真实 Herdr Desktop 0.1.15 和隔离 PATH/home 完成 install、八 Mod check 与 uninstall，恢复原快捷键并保留个人状态；系统 Node、Cargo、下载和编译工具哨兵未被调用。ZIP 共 140 个文件，完整 Node LICENSE 与固定 SHA tarball 中的原文逐字节一致，未包含个人或生成状态。
-- 本次未提交、推送、发布、触发远端工作流、安装到日常 profile、切换日常布局或重启服务。x64 运行、macOS 13.5 实机、未装 CLT 的干净 Mac、浏览器下载后的 Gatekeeper/手动安全许可流程及真实窗口交互均未验收；工作流 YAML 解析通过不代表双架构远端运行通过。
+- Add allowlisted macOS arm64/x64 ZIP packaging and GitHub Actions on both native architectures, including a precompiled resource helper, pinned official Node.js 26.13.1, complete Node/dependency licenses, and final SHA256SUMS. Binaries are not committed; no DMG, signing, notarization, or automatic update service is used.
+- `install.sh` no longer invokes Cargo. Release packages use only the private `runtime/node` and fail explicitly if it is broken, without falling back to global Node, downloading dependencies, or compiling on site. Source developers must explicitly run the helper build script first. Installation preflight checks architecture, package contents, an executable helper, Herdr, and an initialized home, reusing existing ownership, transactions, shortcut restoration, and conflict protection.
+- Add private-runtime entry points for `--check` and `--uninstall`; updates require downloading a newer ZIP and reinstalling. Layout switching and restarts are disabled by default; only `--switch` explicitly enables them. Document the macOS 13.5 minimum, unsigned-software security notice, and independent runtime dependencies for Git, editors, and Agents.
+- Build the final ZIP on macOS arm64; 87 existing installer/Open With/icon tests and 17 final-package consumption-boundary tests passed. Extract into a path containing spaces and Chinese characters, then use the real private Node 26.13.1, real Herdr Desktop 0.1.15, and isolated PATH/home to complete install, checks for eight Mods, and uninstall, restoring original shortcuts and preserving personal state. Sentinels for system Node, Cargo, download, and compilation tools were not invoked. The ZIP contained 140 files; the complete Node LICENSE matched the original in the pinned-SHA tarball byte for byte, and no personal or generated state was included.
+- This work did not commit, push, publish, trigger remote workflows, install into the daily profile, switch the daily layout, or restart services. x64 execution, physical macOS 13.5 hardware, a clean Mac without CLT, Gatekeeper/manual security approval after browser download, and real-window interaction remain unvalidated. Successful workflow YAML parsing does not establish successful remote execution on both architectures.
 
-- Open With 默认列表将 Finder 移到首位，其余应用相对顺序不变；保留已保存的默认应用，自定义应用列表仍遵循个人配置。远程及非 macOS 的 VS Code 回退按应用 ID 查找，不再依赖列表首项。
-- 18 项相关测试和八个 Mod 加载检查通过，已安装到当前 Herdr。真实窗口截图确认 Finder 位于首行、六项图标正常，VS Code 仍为已保存的默认项；未切换布局或重启。
+- Move Finder to the first position in Open With's default list without changing the relative order of other applications; preserve saved defaults and personal custom application lists. Remote and non-macOS VS Code fallbacks look up the application ID rather than relying on the first list entry.
+- 18 related tests and loading checks for eight Mods passed, and the changes were installed into the current Herdr. A real-window screenshot confirmed Finder in the first row, correct icons for all six entries, and VS Code still saved as the default. No layout switch or restart was performed.
 
-- 修复 Open With 中 VS Code、Finder、Zed、IntelliJ IDEA 全部显示通用图标的问题：macOS 安装时通过 NSWorkspace 从本机应用导出图标，按内容哈希缓存到 `data/open-with-icons/`，在 Mod 热加载前写入索引。不分发提取资源；未安装项保留通用图标，个人图标优先，应用启动契约不变。
-- 87 项 Open With、原生图标导出和安装器相关测试通过；当前 macOS Herdr 已生成四枚本机图标缓存，部署后八个 Mod 加载检查通过。运行窗口处于屏外且无可访问内容，`shot` 返回旧帧，尚未确认新界面的视觉效果；未切换布局、重启或提交。
+- Fix generic icons for VS Code, Finder, Zed, and IntelliJ IDEA in Open With: macOS installation exports icons from locally installed applications through NSWorkspace, caches them by content hash in `data/open-with-icons/`, and writes the index before Mod hot reload. Extracted assets are not distributed; missing applications retain generic icons, personal icons take precedence, and launch contracts remain unchanged.
+- 87 Open With, native icon export, and installer-related tests passed. Four local icon caches were generated in the current macOS Herdr, and loading checks for eight Mods passed after deployment. The running window was offscreen with no accessible content, and `shot` returned an old frame, so the new UI's visual appearance was not confirmed. No layout switch, restart, or commit was performed.
 
-- 将 `Professional` 布局统一更名为 `oh-my-herdr`，同步 JSON／SVG、套件清单、快捷键作用域、安装与切换命令。更新安装器移除未修改的受管旧布局，保留个人状态与本地修改保护；不自动切换当前窗口，不迁移旧布局点击状态。各 Mod 标识不变。
-- 收紧 Task Manager footer：按钮从 176 px 缩至 148 px，CPU／内存数值槽分别缩至 40／48 px，改为左对齐并紧贴图标；保留三位数字格式、等宽字体、稳定槽位和 CPU 配色。
-- Task Manager 摘要改为全宽左右布局：CPU、Memory 在左侧分两行显示，Tree 内存趋势图自适应填满右侧剩余宽度；内存指标保留在 tooltip。21 项视图回归与 Desktop 0.1.15 Mod 加载检查通过，隔离原生窗口用固定样本检查了 416／304 px 面板及 footer 的低负载、缩写边界和未知值。未部署到日常应用，未验证物理输入或真实采集链路。
-- Task Manager 打开时自动返回 Herdr Tree，清空过滤并居中定位、展开当前 pane；定位按钮同时展开目标与祖先。页签与 scope 选择器改为同排左右分布，移除 Footprint 下方常驻说明，机器、采样和覆盖状态保留在摘要 tooltip。
-- 21 项视图测试及 Herdr Desktop 0.1.15 Mod 加载检查通过；隔离原生窗口使用固定样本确认同排布局、精简摘要和默认展开，并通过辅助功能点击收起全部及定位按钮验证展开行为。未部署到日常应用，未验证真实采集全链路。
-- Resource Manager 更名为 Task Manager，更新标题、辅助功能名称及键盘上下文；Professional 将资源 footer 移到状态栏最右侧，命令面板提示保留在其左侧。
-- 新增数值稳定排版规范：footer、面板摘要及 CPU／Memory 表格列使用固定宽度槽、等宽字体和右对齐，位数、未知值与内存单位变化不推动相邻元素。footer 资源槽调整为 188 px，配色规则不变。
-- Tree 默认采集、显示和搜索监听端口，移除 Ports 开关及其状态；沿用 5 秒扫描间隔和当前作用域，切到 Processes 或关闭面板停止扫描。
-- Task Manager footer 数值限制为最多三位数字，不计小数点、百分号与单位；内存按数值调整小数位并在需要时升单位，CPU 超过三位用 `k%` 等十进制缩写。仅压缩 footer，tooltip 与面板保留明细，颜色仍按原始 CPU 占用计算。
-- macOS arm64 的 56 项相关 Node 测试及 Herdr Desktop 0.1.15 Mod 初始加载检查通过。隔离原生窗口使用固定样本检查了最右侧 footer、Tree 默认监听行、Processes、未知值与 640 × 480 窄窗口；数值变化前后分隔符及内存图标区域像素一致。固定样本渲染不视为真实鼠标／键盘交互或完整采集链路验收；未部署到日常应用。
-- 修复 Resource Manager 的 Scope 选项文字偏上：为原生 Radio 显式设置 flex 和双轴居中，保持 24 px 高度及现有交互；隔离原生窗口截图确认 Herdr、System 文字垂直居中。
-- Resource Manager 新增 `Herdr / System` 作用域选择器，统一控制 Tree、Processes 和 Ports。每次打开默认 Herdr，切换范围保留关键词与排序，搜索不再隐式扩大范围；定位 pane 返回 Herdr Tree。System 增加全机 CPU／内存及 OS 进程树，未知指标不补零，进程自身指标与机器去重合计分开。footer 始终显示受管资源；关闭弹层停止全机采集，范围切换隔离 CPU 基线、监听缓存、趋势及迟到结果。原生 CLI 改为 `--scope=herdr|system [--ports]`，移除旧 `--all-ports`，helper 与 Mod 需配套部署。
-- 作用域功能在 macOS arm64 验证了 58 项相关 Node 测试、2 项 Rust 测试、Linux／Windows 交叉编译，以及 Herdr Desktop 0.1.15 初始加载和隔离窗口的真实全机 Tree 渲染。辅助功能读取被系统拒绝，未宣称物理鼠标／键盘切换验收。全机 helper 在约 939 个进程、1 Hz、每 5 秒扫描端口的 10 秒短测中占 1.55% 单核、峰值 RSS 3.98 MiB，超过既有 1% CPU 上限；完整应用性能尚未验收。本次未部署到日常应用、切换日常布局或重启现有服务。
-- Resource Manager 增加展开全部、收起全部及定位当前 pane 图标；定位会清空过滤、展开祖先并居中选中目标。新增 Ports 页，按当前作用域列出 TCP 监听地址、进程和 PID，支持键入筛选及列排序；共用现有采集器，每 5 秒扫描，隐藏后停止。移除底部只读与键盘操作说明，错误和覆盖状态移到上方，Refresh / Close 改为图标。
-- 将九个 Node 测试文件迁入 `tests/`，修正模块、快捷键预设和原生 helper 的相对路径；测试命令改为 `node --test tests/*.test.mjs`。新增开发指南，资源监控方案迁至 `docs/design/resource-monitor.md`，历史验收记录归入本 changelog。套件入口、Mod 和布局路径、安装行为不变。
-- 新增 `install.sh`，一条命令完成资源采集程序构建、布局与八个 Mods 部署、快捷键合并和 `herdr-app check`；支持 `--switch` 和 `--dry-run`。README 改为以安装和使用为主，并保留 Gallery `RECIPE.md`、真实窗口预览和统一的布局源文件 `layouts/Professional.json`、`layouts/Professional.svg`。
-- 新增根 Apache-2.0 许可、NOTICE 与第三方来源清单，部署 Mod 自带必要许可。核实 Herdr v0.1.14 与 Open VS Code 对应源码的 Apache-2.0 / MIT 条款，保留其他资源及 native 依赖许可；移除未核清分发权的四枚应用 PNG，以中性图标替代，应用选项和启动行为不变。
+- Rename the `Professional` layout consistently to `oh-my-herdr`, updating JSON/SVG, the suite manifest, shortcut scopes, and installation and switching commands. Update the installer to retire unmodified managed copies of the old layout while preserving personal state and local-modification protection. Do not switch the current window automatically or migrate click state from the old layout. Mod identifiers remain unchanged.
+- Tighten the Task Manager footer: reduce the button from 176 px to 148 px and CPU/memory numeric slots to 40/48 px, using left alignment immediately beside icons. Retain three-digit formatting, monospace text, stable slots, and CPU coloring.
+- Make the Task Manager summary a full-width left/right layout: CPU and Memory appear on two lines at the left, while the Tree memory trend fills the remaining width at the right; the memory metric stays in the tooltip. 21 view regressions and Desktop 0.1.15 Mod loading checks passed. An isolated native window with fixed samples covered 416/304 px panels and low-load, abbreviation-boundary, and unknown footer values. Not deployed to the daily application; physical input and the real collection path were not validated.
+- Opening Task Manager automatically returns to Herdr Tree, clears the filter, and centers, locates, and expands the current pane; the locate button expands both target and ancestors. Place tabs and the scope selector at opposite ends of one row, remove the persistent description below Footprint, and retain machine, sample, and coverage status in the summary tooltip.
+- 21 view tests and Herdr Desktop 0.1.15 Mod loading checks passed. An isolated native window with fixed samples confirmed the single-row layout, compact summary, and default expansion; accessibility clicks on collapse all and locate validated expansion behavior. Not deployed to the daily application; the real full collection path was not validated.
+- Rename Resource Manager to Task Manager, updating the title, accessible names, and keyboard context. Professional moves the resource footer to the far right of the status bar, keeping the command-palette hint to its left.
+- Add numeric layout stability rules: the footer, panel summary, and CPU/Memory table columns use fixed-width slots, monospace text, and right alignment so changes in digit counts, unknown values, and memory units do not push adjacent elements. Set the footer resource slot to 188 px; color rules remain unchanged.
+- Tree collects, displays, and searches listener ports by default. Remove the Ports toggle and its state; retain the 5-second scan interval and current scope, stopping scans when switching to Processes or closing the panel.
+- Limit Task Manager footer values to three digits, excluding decimal points, percentage signs, and units. Memory adjusts decimal places and promotes units when needed; CPU beyond three digits uses decimal abbreviations such as `k%`. Only the footer is compacted; tooltips and the panel retain details, and colors still use raw CPU utilization.
+- On macOS arm64, 56 related Node tests and Herdr Desktop 0.1.15 initial Mod loading checks passed. An isolated native window with fixed samples covered the far-right footer, default Tree listener rows, Processes, unknown values, and a narrow 640 × 480 window; separator and memory-icon regions had identical pixels before and after numeric changes. Fixed-sample rendering is not acceptance of real mouse/keyboard interaction or the complete collection path. Not deployed to the daily application.
+- Fix vertically high Scope option labels in Resource Manager: explicitly apply flex and centering on both axes to native Radio, retaining the 24 px height and existing interaction. Isolated native-window screenshots confirmed vertically centered Herdr and System labels.
+- Add a `Herdr / System` scope selector to Resource Manager, controlling Tree, Processes, and Ports together. Each opening defaults to Herdr; scope switches preserve keywords and sorting, and searches no longer implicitly broaden scope. Locating a pane returns to Herdr Tree. System adds whole-machine CPU/memory and an OS process tree, without filling unknown metrics with zero, and separates process-own metrics from deduplicated machine totals. The footer always shows managed resources; closing the popover stops whole-machine collection, and scope switches isolate CPU baselines, listener caches, trends, and late results. Change the native CLI to `--scope=herdr|system [--ports]`, removing the old `--all-ports`; helper and Mod must be deployed together.
+- Scope functionality was validated on macOS arm64 with 58 related Node tests, 2 Rust tests, Linux/Windows cross-compilation, Herdr Desktop 0.1.15 initial loading, and actual whole-machine Tree rendering in an isolated window. System denied accessibility reads, so physical mouse/keyboard switching acceptance was not claimed. A 10-second whole-machine helper test with about 939 processes at 1 Hz and port scans every 5 seconds used 1.55% of one core and 3.98 MiB peak RSS, exceeding the existing 1% CPU ceiling; full-application performance remains unvalidated. This work did not deploy to the daily application, switch the daily layout, or restart existing services.
+- Add expand all, collapse all, and locate current pane icons to Resource Manager; locate clears the filter, expands ancestors, and centers and selects the target. Add a Ports page listing TCP listener addresses, processes, and PIDs within the current scope, with type-to-filter and column sorting. It shares the existing collector, scanning every 5 seconds and stopping when hidden. Remove the bottom read-only and keyboard instructions, move errors and coverage status above, and replace Refresh / Close with icons.
+- Move nine Node test files into `tests/`, correcting relative paths for modules, shortcut presets, and the native helper; change the test command to `node --test tests/*.test.mjs`. Add a development guide, move the resource monitoring design to `docs/design/resource-monitor.md`, and place historical validation records in this changelog. Suite entry points, Mod and layout paths, and installation behavior remain unchanged.
+- Add `install.sh` to build the resource collector, deploy the layout and eight Mods, merge shortcuts, and run `herdr-app check` with one command; support `--switch` and `--dry-run`. Refocus the README on installation and usage while retaining Gallery `RECIPE.md`, real-window previews, and unified layout sources `layouts/Professional.json` and `layouts/Professional.svg`.
+- Add a root Apache-2.0 license, NOTICE, and third-party source inventory; deployed Mods carry required licenses. Verify Apache-2.0 / MIT terms for Herdr v0.1.14 and the corresponding Open VS Code sources, retaining other asset and native dependency licenses. Remove four application PNGs whose distribution rights had not been established, replacing them with neutral icons without changing application choices or launch behavior.
 
-- 修复 Resource Manager 按空格时关闭弹层的问题：空格和 Enter 使用面板内的 action 绑定，避免宿主 Popover 提前将它们作为确认操作；空格继续输入关键词分隔符，Enter 保留行展开行为。
+- Fix Resource Manager closing its popover on space: space and Enter use panel-local action bindings so the host Popover does not handle them as confirmation first. Space continues to separate search keywords, and Enter retains row expansion.
 
-- Resource Manager 移除固定搜索框，改为直接键入过滤所有表格字段；支持空格分词、跨字段组合匹配与 Backspace 编辑。Tree 保留命中项的所属路径和 OS 父进程链；第一次 Esc 清空搜索，第二次 Esc 隐藏弹层。关闭 Ports 保留关键词并排除监听字段。
+- Remove Resource Manager's fixed search box in favor of type-to-filter across all table fields, supporting space-separated keywords, combined cross-field matching, and Backspace editing. Tree retains ownership paths and OS-parent chains for matches. The first Esc clears search; the second hides the popover. Turning Ports off preserves keywords and excludes listener fields.
 
-- Resource Manager 弹层在定位前按窗口尺寸计算像素宽高，保留 416 × 640 px 上限及窄窗口约束，消除百分比最大高度造成的 footer 上方空隙。
+- Calculate Resource Manager popover width and height in pixels from the window dimensions before positioning, retaining the 416 × 640 px maximum and narrow-window constraints, eliminating the gap above the footer caused by percentage-based maximum height.
 
-- Resources footer 的 CPU 低于 100% 时固定一位小数，达到 100% 后显示整数，例如 `1.0%`、`10.0%`、`120%`；图标与数值按单核占用从主题绿色经黄色渐变到红色，未知值保持中性色。CPU、内存各自分组，等宽数值左对齐并紧贴前面的图标，分隔符前后各一个空格；组内按内容排列，外层固定为 164 px，剩余空位留在最右侧。
+- Resources footer CPU keeps one decimal place below 100% and uses integers at 100% or above, for example `1.0%`, `10.0%`, and `120%`. Icons and values transition from theme green through yellow to red according to single-core utilization; unknown values remain neutral. CPU and memory form separate groups, with left-aligned monospace values immediately after their icons and one space on either side of the separator. Groups lay out by content inside a fixed 164 px outer width, leaving spare space at the far right.
 
-- Professional 支持单次 `⌘⇧G` 等待 300ms 后切换 Changes、300ms 内连续两次切换 Git Graph；两种操作均可再次触发以隐藏对应面板。Changes 按可见状态切换，不受终端或面板焦点影响；双次操作保留右侧 Files/Changes 状态。由标签栏统一计时，切换 space、tab 或布局后丢弃待执行操作，Files 快捷键立即执行并取消待处理的 Changes。安装器移除旧原生双次序列，避免叠加宿主固定的 1 秒等待，卸载恢复安装前原值。
-- Agents 列表隐藏 OMP 自动标题中品牌后方的重复状态符号，包含等待、需关注、静态分隔符及四种 spinner；状态保留在 Herdr 行尾。任务 emoji、正文、无品牌标题及手动命名的 tab 保持原样。
-- Resources 改为 footer 实时 CPU、内存与原生弹层，共享一套 1 Hz 采样；footer 不显示 `≈` 和终端数。沿用 Orca 的 416 px 弹层与紧凑表格；原 Resources / PTYs 合并为 Tree 页签，资源树按 Space → Pane 展示，省略 Tab 层，统一保留排序、子进程树、内存趋势和组合搜索。Ports 开关默认关闭，关闭后清空端口条件并隐藏缓存端口行。未知及覆盖不完整单独标注；应用失活暂停，显示值不变时减少 footer 与弹层重绘。
-- Resource Manager 新增 Processes 页，将受管终端及子进程铺平成 Name / PID / CPU / Memory 明细表，支持名称或机器名、精确 PID 筛选与列排序；共享现有快照，不新增采样或端口扫描。
-- 新增 Rust helper：macOS Herdr 范围按受管根查询后代，System 枚举全机；Linux 使用 procfs，Windows 使用原生进程和 TCP API。按范围读取内存与累计 CPU，监听每 5 秒按需采集。PID 复用、超时和迟到结果不污染当前数据，不回退重型系统命令。
-- 安装器支持本机 helper 的构建前检查、可执行权限和失败回滚；目标 Desktop 版本更新为 0.1.15。原生源码与依赖锁入库，二进制按目标平台构建，许可随 Mod 安装。本机采集及 Linux/Windows 交叉编译检查通过；完整界面与全链路性能仍待验收。
-- 新增 `⌘⇧E` 聚焦 Files、`⌘⇧G` 切换 Changes；Files 已聚焦时再次按下隐藏，可见但未聚焦时只聚焦。Changes 按可见状态切换，隐藏后返回当前 pane。新增 `professional-panels` 布局适配器，保留内置 0.1.14 面板源码和原生子控件，内置模块不变；纳入安装归属和快捷键恢复。
-- Professional 右上角改为 Files、Changes、`+`、Open With 的顺序，将两个启动入口相邻放置；保留独立菜单、默认项和快捷键行为，并同步布局预览图。
-- Professional 新增基于内置 Agents 0.1.14 的 `agents-professional` 副本；OMP 配有图标时只移除自动标题的前导品牌 `π`，保留状态符号、任务 emoji、正文和手动命名的 tab。内置 Agents 不变，副本及布局引用纳入套件安装归属。
-- Agent Launcher 和 Open With 的列表行尾预留 12 像素滚动条通道，避免滚动条覆盖设置默认项的星标按钮；保留按钮尺寸和原有点击行为。
-- 标签栏的下拉箭头改用固定 12 像素的内置 SVG，并显式水平、垂直居中，避免文本箭头受字体基线影响而偏下。
-- Agent Launcher 菜单恢复原生 `+` 的紧凑尺寸和信息密度，移除额外标题、机器说明及底部教程；未安装项最多显示两个，保留默认星标、自定义命令和 space/worktree 操作。
-- 收录 oh-my-pi v18.18.6 官方 OMP 图标，保留原始 SVG、MIT 许可与来源记录；通过个人 `programs.json` 接入。菜单载入时刷新默认 agent 的名称和图标，保留已有或载入期间新选的默认项。
-- 新增 Agent Launcher：Professional 标签栏的 `+` 改为双段按钮，主按钮与 `⌘⇧A` 共用默认启动入口，右侧下拉选择一次启动项；行尾 `☆ / ★` 只设置默认项，不启动。默认项与一个自定义命令按机器保存在个人 shared state 中，不纳入安装或卸载归属。
-- 新增自定义新 tab 命令编辑器，使用程序与 JSON 参数数组，不隐式执行 shell 语法。启动固定菜单打开时的 space、机器和目录；默认 agent 失效时明确报错。保留普通终端、space/worktree 操作、`⌘T` 和原生 `⌘⇧P`。
-- 重新引入基于内置 `tabs` 0.1.14 的个人 `tabs-professional` 副本，仅定制启动入口；新增独立 `agent-launcher` Mod。安装器支持更新旧的受管标签栏副本，保留个人文件并对新快捷键执行既有冲突检查与卸载恢复。
-- 新增 `keybindings.json` 统一分发 macOS 按键规则：`⌘W` 从关闭 tab 改为关闭 pane，移除 `⌘⇧W` 的关闭 pane 绑定；不新增运行时 Mod。
-- 安装器按绑定合并个人 `keys.json`，记录实际原值及安装值。首次安装拒绝其他自定义值，更新和检查检测受管绑定改动；规则退休与卸载恢复未修改的原绑定，卸载保留个人后来修改的按键并警告。快捷键写入参与现有部署事务和失败回滚，旧版归属记录可迁移。
-- 右上角 Open With 改为双段按钮：主按钮显示默认应用图标和名称，点击直接打开当前仓库或目录；右侧下拉继续提供打开方式和默认应用选择。
-- 新增 `open-with.open-default` 命令，与右上角主按钮共用默认应用启动逻辑；`⌘G` 从已退休的 `open-vscode` 入口迁移到该命令，不弹选择菜单。只有可见的 launcher 实例监听，菜单不重复启动。
-- Open With 槽位跟随按钮实际宽度调整，消除短应用名与 Changes 之间的多余空白；按钮保留最大宽度，超长名称截断。
-- 底部 Git Graph 入口仅保留文字，保持面板开关和选中状态。
-- Git Graph 移为独立底部面板，默认收起，可调整高度；状态栏按钮只控制 Graph，Files/Changes 保留在右侧并可同时显示。
-- Git Graph 支持 Git workspace 内的多个 submodules：仓库选择器列出主仓库和递归的已初始化子仓库，以相对路径区分同名仓库；切换时隔离历史、状态、详情和操作目标，阻止其他仓库的迟到详情覆盖当前选择。不自动初始化或更新 submodules。
-- Git Graph 仓库选择器改为锚定按钮的原生浮层，不再挤占提交图空间；支持内部滚动、选择关闭、Esc 和点击外部关闭，Manygit 使用同一交互。
-- commit 详情改为行内折叠展开：单项展开、再次点击收起，元信息与变更文件按左右两栏排列，窄面板上下排列；两栏撑满展开区，避免文件列表被挤掉。提交图线和列表继续穿过展开项。
-- diff 改为 VS Code 式预览：单击文件复用当前 space 的预览 tab，双击固定，后续预览不覆盖固定项；已有固定项直接切回，关闭预览后可重开。tab 名称显示预览/固定状态。
-- diff 读取固定仓库、机器、commit 和文件，保留未跟踪标记；过期异步结果不会覆盖新文件。不创建终端或磁盘临时文件，tab 仍按宿主规则保存和恢复。
-- diff 正文仅显示差异内容并占满面板，移除重复的文件路径、提交、仓库与只读说明区；保留行号、增删标记、滚动和必要的加载/异常状态。
-- Professional 的 diff pane title 改为文件相对路径；固定打开时的 workspace/cwd，在 workspace 下查看 submodule 时保留子仓库前缀，直接在子仓库中查看则相对该仓库。其他 pane 保留原有标题、状态与操作，diff 正文不增加标题区。
-- 移除 Git Graph 文件详情与 diff 的 F4 源文件跳转，以及专用源文件预览、tab 复用状态处理和相关测试；保留 diff 预览、固定 tab 和路径标题，不修改全局快捷键。
+- Professional supports a single `⌘⇧G` to toggle Changes after waiting 300ms, or two presses within 300ms to toggle Git Graph; either action can be repeated to hide its panel. Changes toggles by visibility regardless of terminal or panel focus; double-pressing preserves the right-side Files/Changes state. The tab bar owns timing and discards pending actions after space, tab, or layout changes. The Files shortcut runs immediately and cancels pending Changes. The installer removes the old native double-press sequence to avoid adding the host's fixed 1-second wait; uninstall restores the original pre-install value.
+- Hide redundant status symbols following the brand in OMP automatic titles in the Agents list, including waiting, attention, static separators, and four spinners; status remains at the end of the Herdr row. Task emoji, body text, unbranded titles, and manually named tabs remain unchanged.
+- Change Resources to live CPU and memory in the footer plus a native popover, sharing 1 Hz sampling; the footer no longer shows `≈` or terminal counts. Retain Orca's 416 px popover and compact tables. Merge the original Resources / PTYs into a Tree tab, showing Space → Pane and omitting Tab, while retaining sorting, child-process trees, memory trends, and combined search. The Ports toggle defaults off; disabling it clears port conditions and hides cached port rows. Unknown values and incomplete coverage are marked separately. Collection pauses when the application is inactive, and unchanged displayed values reduce footer and popover redraws.
+- Add a Processes page to Resource Manager, flattening managed terminals and descendants into a Name / PID / CPU / Memory detail table, supporting name or machine-name filtering, exact PID filtering, and column sorting. It shares existing snapshots without new sampling or port scans.
+- Add a Rust helper: macOS Herdr scope queries descendants from managed roots, while System enumerates the whole machine; Linux uses procfs, and Windows uses native process and TCP APIs. Read memory and cumulative CPU by scope, collecting listeners on demand every 5 seconds. PID reuse, timeouts, and late results do not contaminate current data; no fallback to heavyweight system commands.
+- The installer supports local-helper build prechecks, executable permissions, and failure rollback; update the target Desktop version to 0.1.15. Commit native sources and locked dependencies, build binaries per target platform, and install licenses with the Mod. Local collection and Linux/Windows cross-compilation checks passed; the complete UI and full-path performance still await acceptance.
+- Add `⌘⇧E` to focus Files and `⌘⇧G` to toggle Changes. Pressing Files again when focused hides it; when visible but unfocused, it only receives focus. Changes toggles by visibility and returns to the current pane when hidden. Add a `professional-panels` layout adapter, retaining built-in 0.1.14 panel sources and native child controls without changing built-in modules; include it in installation ownership and shortcut restoration.
+- Reorder Professional's upper-right controls to Files, Changes, `+`, Open With, placing both launch entry points together while preserving separate menus, defaults, and shortcut behavior; update the layout preview.
+- Add an `agents-professional` copy based on built-in Agents 0.1.14 to Professional. When OMP has an icon, remove only the leading brand `π` from automatic titles, retaining status symbols, task emoji, body text, and manually named tabs. Built-in Agents remains unchanged; include the copy and layout reference in suite installation ownership.
+- Reserve a 12-pixel scrollbar lane at the end of Agent Launcher and Open With list rows so the scrollbar does not cover the default-setting star button; preserve button sizes and click behavior.
+- Replace the tab bar's dropdown arrow with a fixed 12-pixel built-in SVG, explicitly centered horizontally and vertically to avoid text-arrow displacement from font baselines.
+- Restore the compact dimensions and information density of native `+` in the Agent Launcher menu, removing the extra title, machine description, and bottom tutorial. Show at most two uninstalled entries, retaining default stars, custom commands, and space/worktree actions.
+- Include the official OMP icon from oh-my-pi v18.18.6, retaining the original SVG, MIT license, and source record; integrate it through personal `programs.json`. Refresh the default agent's name and icon when the menu loads, preserving existing defaults and defaults newly chosen during loading.
+- Add Agent Launcher: replace Professional's tab-bar `+` with a split button. The main button and `⌘⇧A` share the default launch entry point, while the right dropdown selects a one-time launch option. Row-end `☆ / ★` only sets the default and does not launch. The default and one custom command are stored per machine in personal shared state, outside installation or uninstall ownership.
+- Add a custom new-tab command editor using a program and JSON argument array, without implicitly executing shell syntax. Launches retain the space, machine, and directory from when the menu opened; an invalid default agent fails explicitly. Retain ordinary terminals, space/worktree actions, `⌘T`, and native `⌘⇧P`.
+- Reintroduce a personal `tabs-professional` copy based on built-in `tabs` 0.1.14, customizing only launch entry points; add a standalone `agent-launcher` Mod. The installer can update older managed tab-bar copies, preserves personal files, and applies existing conflict checks and uninstall restoration to new shortcuts.
+- Add `keybindings.json` to distribute macOS key rules centrally: change `⌘W` from closing a tab to closing a pane and remove the `⌘⇧W` close-pane binding; add no runtime Mod.
+- Merge bindings into personal `keys.json`, recording actual original and installed values. First installation rejects other custom values; updates and checks detect changes to managed bindings. Retiring rules and uninstall restore unchanged original bindings; uninstall preserves later personal key changes and warns. Shortcut writes participate in the existing deployment transaction and failure rollback; old ownership records can migrate.
+- Change the upper-right Open With control to a split button: the main button shows the default application's icon and name and directly opens the current repository or directory; the right dropdown retains application and default selection.
+- Add `open-with.open-default`, sharing default-application launch logic with the upper-right main button. Migrate `⌘G` from the retired `open-vscode` entry point to this command without opening a selection menu. Only visible launcher instances listen, avoiding duplicate launches from the menu.
+- Make the Open With slot follow actual button width, removing excess space between short application names and Changes; retain a maximum button width and truncate long names.
+- Keep only text for the bottom Git Graph entry point, retaining panel toggling and selected state.
+- Move Git Graph into a standalone bottom panel, collapsed by default and resizable. Its status-bar button controls only Graph; Files/Changes stay on the right and may remain visible simultaneously.
+- Support multiple submodules within a Git workspace in Git Graph: the repository selector lists the main repository and recursively initialized subrepositories, distinguishing duplicate names by relative paths. Switching isolates history, status, details, and operation targets and prevents late details from another repository from replacing the current selection. Submodules are not initialized or updated automatically.
+- Change the Git Graph repository selector to a native popover anchored to its button, no longer taking space from the commit graph; support internal scrolling, closing on selection, Esc, and outside clicks. Manygit uses the same interaction.
+- Expand commit details inline, one at a time, with a second click collapsing them. Metadata and changed files use two side-by-side columns, stacked in narrow panels; both columns fill the expanded area so the file list is not squeezed out. Commit graph lines and the list continue through expanded entries.
+- Change diff to a VS Code-style preview: a single click reuses the current space's preview tab, a double click pins it, and later previews do not overwrite pinned tabs. Existing pinned entries are selected directly; a closed preview can be reopened. Tab names show preview/pinned state.
+- Diff reads retain the repository, machine, commit, and file, preserving untracked markers; stale asynchronous results cannot overwrite newer files. No terminals or temporary disk files are created; tabs still save and restore under host rules.
+- Show only diff content in the full panel body, removing repeated file-path, commit, repository, and read-only description areas; retain line numbers, addition/deletion markers, scrolling, and necessary loading/error states.
+- Change Professional's diff pane title to the file's relative path. Retain workspace/cwd from opening time, keeping submodule prefixes when viewed from the workspace and using paths relative to the subrepository when viewed directly inside it. Other panes retain their titles, status, and actions; no title area is added to the diff body.
+- Remove F4 source-file navigation from Git Graph file details and diff, along with the dedicated source-file preview, tab-reuse state handling, and related tests. Retain diff preview, pinned tabs, and path titles without changing global shortcuts.
 
-### 资源监控历史验收记录
+### Resource monitoring historical validation
 
-以下记录迁自原资源监控方案，保留当时的验证范围与限制，不代表本次目录整理重新执行了这些验收。
+These records were moved from the original resource monitoring design, preserving the validation scope and limitations at the time. They do not mean these acceptance steps were rerun during the directory reorganization.
 
-130 项 Node 回归与 1 项 Cargo 单元测试通过。覆盖 CPU 忙循环对照、嵌套根与真实子进程、IPv4/IPv6 监听、全机端口搜索、无 argv 输出、非法 CLI 输入、CPU 预热与 PID 复用、异步作废、单一定时器、显示值不变免重绘、失活暂停、监听按需请求、卸载与权限回滚。Linux / Windows 通过 x86_64 Cargo check，尚未运行验收。
+130 Node regressions and 1 Cargo unit test passed, covering CPU busy-loop comparisons, nested roots and real child processes, IPv4/IPv6 listeners, whole-machine port searches, no argv output, invalid CLI input, CPU warmup and PID reuse, asynchronous invalidation, a single timer, skipped redraws for unchanged displayed values, inactive-window pauses, on-demand listener requests, uninstall, and permission rollback. Linux / Windows passed x86_64 Cargo check but had not undergone runtime acceptance.
 
-隔离应用安装后，8 个 Mod 的原生加载检查通过。独立应用 home 和 Core 会话中的原生帧已确认真实终端采样、footer 数值、横向页签、表头列对齐、PTYs 趋势与真实监听端口筛选。为在后台验证采样，测试副本强制视为活动窗口；发布源码仍按真实窗口活动状态暂停采集。端口筛选通过测试副本设置初始条件，不视为真实输入交互验收。
+After isolated-application installation, native loading checks passed for 8 Mods. Native frames from a separate application home and Core session confirmed real terminal sampling, footer values, horizontal tabs, aligned table-header columns, PTYs trends, and real listener-port filtering. To validate background sampling, the test copy was forced to count as active; release sources still pause collection according to actual window activity. Port filtering used initial conditions set in the test copy and does not count as real input-interaction acceptance.
 
-原生宿主加载检查覆盖 footer 与强制打开的 Resources / PTYs；新增 Processes 后，另用隔离 Mod 检查了新增页面及已知、未知、过期进程行。33 项相关回归通过，覆盖平表去重、跨机器 PID、PID 复用、过滤、排序和共用采样。
+Native host loading checks covered the footer and forced-open Resources / PTYs. After adding Processes, a separate isolated Mod checked the new page and known, unknown, and expired process rows. 33 related regressions passed, covering flat-table deduplication, cross-machine PIDs, PID reuse, filtering, sorting, and shared sampling.
 
-2026-11-11 合并为 Tree 后，34 项相关回归与 Herdr Desktop 0.1.15 的 Mod 加载检查通过。隔离应用 home、Core 会话和本机监听进程验证了 Tree / Processes 实际渲染、内存趋势、页签切换，以及 Ports 开关的启用与关闭。真实端口通过隔离副本预设筛选条件显示；关闭 Ports 后，端口行、端口筛选框与监听说明消失。原生辅助功能接口未能写入筛选框，因此预设条件验证不视为真实输入交互验收；本次未验证物理鼠标、键盘或滚动，未更新日常安装。
+After merging into Tree on 2026-11-11, 34 related regressions and Herdr Desktop 0.1.15 Mod loading checks passed. An isolated application home, Core session, and local listener process validated actual Tree / Processes rendering, memory trends, tab switching, and enabling/disabling the Ports toggle. Real ports were displayed through filter conditions preset in an isolated copy; disabling Ports removed port rows, the port filter box, and listener descriptions. The native accessibility API could not write into the filter box, so preset-condition validation does not count as real input-interaction acceptance. Physical mouse, keyboard, and scrolling were not validated, and the daily installation was not updated.
 
-通过宿主桌面工具在真实窗口点击 footer 并切换 Processes，已确认 Space → Pane 展示、平表四列对齐和真实采样数据。这不能证明像素级 1:1；实际筛选输入、排序点击、键盘焦点、Esc / outside dismissal、滚动、主题和窄窗口仍需真实窗口验收。只读范围和布局均在自维护扩展内，不修改 Desktop/Core/TUI 本体。
+Using the host desktop tool to click the footer and switch to Processes in a real window confirmed Space → Pane presentation, four-column flat-table alignment, and real sampled data. This does not establish pixel-level 1:1 fidelity; actual filter input, sorting clicks, keyboard focus, Esc / outside dismissal, scrolling, themes, and narrow windows still require real-window acceptance. Read-only behavior and layout remain entirely within the self-maintained extension, without modifying Desktop/Core/TUI itself.
 
-2026-11-11 改为键入过滤后，38 项相关回归、完整 Node 测试与 Herdr Desktop 0.1.15 的 Mod 加载检查通过。隔离应用用固定样本验证无搜索框的 Tree 和预设 `worker 12.5% 2.0 MB` 的 Processes 渲染。通过原生 action 分发确认第一次 Esc 清空搜索且 `open=true`，释放后第二次令 `open=false`。后台窗口的辅助功能接口未暴露可操作控件，截图在后台也未持续刷新，因此这些结果不视为真实物理按键及关闭画面的验收。未更新日常安装。
+After switching to type-to-filter on 2026-11-11, 38 related regressions, the full Node test suite, and Herdr Desktop 0.1.15 Mod loading checks passed. An isolated application with fixed samples validated Tree without a search box and Processes rendering with preset `worker 12.5% 2.0 MB`. Native action dispatch confirmed that the first Esc cleared search with `open=true`; after release, the second set `open=false`. The background window's accessibility API exposed no actionable controls, and screenshots did not refresh continuously in the background, so these results do not count as acceptance of real physical keys or the closed-state screen. The daily installation was not updated.
 
-随后修复空格关闭弹层的回归。宿主 Popover 的空格与 Enter 绑定会先分发 Confirm action，再决定是否发送原始键盘事件；Resource Manager 现在为这两个按键注册局部 action。模拟该分发顺序的回归测试先复现空格令 `open=false`，修复后通过；39 项相关测试覆盖 Tree / Processes 的空格分词、Enter 行展开和两次 Esc。完整 Node 测试与 0.1.15 Mod 加载检查通过。本次未验证真实物理按键，未更新日常安装。
+A subsequent fix addressed the space-closes-popover regression. The host Popover's space and Enter bindings dispatch Confirm before deciding whether to send the raw keyboard event; Resource Manager now registers local actions for those keys. A regression test simulating that dispatch order first reproduced space setting `open=false` and passed after the fix; 39 related tests covered space-separated Tree / Processes keywords, Enter row expansion, and two-step Esc. The full Node test suite and 0.1.15 Mod loading checks passed. Real physical keys were not validated, and the daily installation was not updated.
 
 ## 0.3.0 — 2026-11-10
 
-- 将 Open VS Code 的本机启动、协议回退和 Remote - SSH 能力合入 Open With，移除独立 `open-vscode` Mod；SSH Host 配置改为 `mods/open-with/hosts.json`。
-- 移除 `tabs-professional`，Professional 改用内置 `tabs`，继续保留标签管理及 Files/Changes 入口。
-- Open With 保留在窗口右上角；底部 statusline 通过薄布局适配器在机器、分支、agents 信息右侧显示 Git Graph 按钮，Graph 仍显示在原右侧面板。左侧 footer 只保留原有 Settings/Add machine。
-- Git Graph 的 Changes 跳转改为显式集成，仅在宿主布局和仓库目标匹配时提供，避免独立使用时操作错误布局或仓库。
-- 保持目标目录和机器同源，保留 POSIX 文件名中的反斜杠与 Windows drive/UNC 路径；远程目标只交给 VS Code Remote - SSH。
-- 安装器按旧归属记录退休两个旧组件，保留个人文件；SSH Host 配置单次迁移、冲突预检和失败回滚，不纳入套件文件归属。
+- Merge Open VS Code's local launch, protocol fallback, and Remote - SSH capabilities into Open With, removing the standalone `open-vscode` Mod; move SSH Host configuration to `mods/open-with/hosts.json`.
+- Remove `tabs-professional`; Professional uses built-in `tabs`, retaining tab management and Files/Changes entry points.
+- Keep Open With at the upper right. A thin layout adapter adds a Git Graph button to the bottom statusline to the right of machine, branch, and agents information; Graph still appears in the original right-side panel. The left footer retains only the original Settings/Add machine.
+- Make Git Graph's Changes navigation an explicit integration, available only when the host layout and repository target match, avoiding operations on the wrong layout or repository when used independently.
+- Keep target directories and machines from the same source, preserving backslashes in POSIX filenames and Windows drive/UNC paths; send remote targets only to VS Code Remote - SSH.
+- Retire two old components according to prior ownership records while preserving personal files. SSH Host configuration uses a one-time migration, conflict preflight, and failure rollback, outside suite-file ownership.
 
 ## 0.2.0 — 2026-11-09
 
-- 将整个项目移入 `desktop/extensions/oh-my-herdr/`，内部继续保留一个布局和多个独立 Mods。
-- 合并重复的 Git Graph：以较新的 0.3.2 实现统一为 `git-graph`，移除独立 `git-graph-main`。
-- 同步迁移布局、工具栏、资源和自弹窗引用；保留 Open With 与 Remote SSH 直达功能。
-- 安装器支持从旧归属记录移除重复组件；旧副本备份到运行 `mods/` 目录之外。
+- Move the entire project into `desktop/extensions/oh-my-herdr/`, retaining one layout and multiple independent Mods internally.
+- Merge duplicate Git Graph implementations into `git-graph` using the newer 0.3.2 implementation, removing standalone `git-graph-main`.
+- Migrate layout, toolbar, assets, and self-popover references together; retain Open With and direct Remote SSH access.
+- Support removal of duplicate components using old ownership records; back up old copies outside the runtime `mods/` directory.
 
 ## 0.1.0 — 2026-11-09
 
-- 将 Professional 布局与五个独立 Mods 纳入 oh-my-herdr 组件清单，保留现有模块名称和共享状态 key。
-- 纳入两份 Git Graph 与 Open VS Code 源码，保留来源信息和已有许可证。
-- 移除 Git Graph 自身的版本检查和更新提示，改由套件源码统一维护。
-- 用统一的 install、check、uninstall 入口替代 Open With 单组件安装脚本。
-- 增加按文件哈希管理的部署归属、冲突预检和失败回滚，保留个人配置及运行状态。
-- 明确安装不切换布局、不修改快捷键、不重启应用，公开分发前需核查品牌资源授权。
+- Include the Professional layout and five independent Mods in the oh-my-herdr component manifest, retaining existing module names and shared-state keys.
+- Include both Git Graph copies and Open VS Code sources, retaining attribution and existing licenses.
+- Remove Git Graph's own version checks and update notices; maintain it through the suite sources instead.
+- Replace Open With's single-component installation script with unified install, check, and uninstall entry points.
+- Add file-hash-based deployment ownership, conflict preflight, and failure rollback, preserving personal configuration and runtime state.
+- Explicitly state that installation does not switch layouts, modify shortcuts, or restart the application, and that brand-asset authorization must be checked before public distribution.

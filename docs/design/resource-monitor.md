@@ -1,68 +1,68 @@
-# Task Manager 原生监控设计
+# Task Manager native monitoring design
 
-目标版本为 Herdr Desktop 0.1.15。本文记录资源采集架构、JSON 协议和性能口径；构建、测试与实机验证步骤见[开发指南](../development.md)，历史验收记录见 [Changelog](../../CHANGELOG.md#资源监控历史验收记录)。
+The target version is Herdr Desktop 0.1.15. This document records the resource collection architecture, JSON protocol, and performance criteria. See the [development guide](../development.md) for build, test, and real-device validation steps, and the [Changelog](../../CHANGELOG.md#resource-monitoring-historical-validation) for historical validation records.
 
-## 功能与边界
+## Features and boundaries
 
-oh-my-herdr footer 最右侧显示 Herdr 受管 CPU 和内存，不随弹层作用域变化。点击打开同一 View 的 Task Manager。使用原生 Popover、RadioGroup、Tab、虚拟列表与主题色，宽度上限 416 px，高度上限 640 px。标题下方左侧为 Tree、Processes、Ports 页签，右侧为统一控制三个页签的 `Herdr / System` 选择器，同行使用 space-between 布局。每次打开返回 Herdr Tree，清空过滤并定位、展开当前 pane；打开期间切换页签保留范围。切换范围保留关键词与排序，重置滚动位置。Tree 始终显示已采集的监听行，不提供 Ports 开关。
+The far-right oh-my-herdr footer shows Herdr-managed CPU and memory regardless of the popover scope. Clicking it opens Task Manager in the same View. It uses native Popover, RadioGroup, Tab, virtual lists, and theme colors, with a maximum width of 416 px and height of 640 px. Below the title, Tree, Processes, and Ports tabs sit on the left, with a `Herdr / System` selector controlling all three tabs on the right, in the same space-between row. Each opening returns to Herdr Tree, clears the filter, and locates and expands the current pane; switching tabs while open preserves the scope. Switching scope preserves keywords and sorting but resets the scroll position. Tree always displays collected listener rows and has no Ports toggle.
 
-三个页签均无固定搜索框。直接键入字符进入搜索，空格分隔关键词，忽略大小写且全部命中；支持跨字段匹配。Tree 和 Processes 可匹配名称、机器、PID/PPID、显示格式的 CPU 和内存，Tree 还支持所属路径与监听字段。Backspace 删除字符，第一次 Esc 清空搜索，第二次 Esc 关闭弹层；Esc 使用局部 action 绑定，优先于 Popover 的默认关闭处理。方向键和 Enter 保留导航及展开操作，空格仅用于分词。切换页签清空搜索。
+None of the three tabs has a fixed search box. Typing starts a search; space-separated keywords are case-insensitive and must all match, including across fields. Tree and Processes match names, machines, PID/PPID, and formatted CPU and memory; Tree also matches ownership paths and listener fields. Backspace deletes characters, the first Esc clears the search, and the second Esc closes the popover. Esc uses a local action binding that takes precedence over Popover's default dismissal. Arrow keys and Enter retain navigation and expansion behavior; spaces only separate keywords. Switching tabs clears the search.
 
-Herdr 范围监控 Core 公开的 live 终端 PID 及真实 OS 后代。Tree 按 Space → Pane 展示，当前 Space 置顶；内部保留 Machine / Space / Tab / Pane 归属关系，展示时跳过 Tab 层。逻辑 parent 只定位展示层级；资源归属只使用 OS PPID。没有可靠 PID 绑定的 Desktop、Core、已脱离进程树的 daemon 和容器，不虚构计量桶。System 范围枚举各机器的 OS 进程，Tree 按机器 → PPID 层级展示，缺失父进程作为根，环打断一条边。进程节点只显示自身资源，机器汇总按身份去重，不重复累加后代。
+Herdr scope monitors live terminal PIDs exposed by Core and their actual OS descendants. Tree displays Space → Pane, with the current Space first; Machine / Space / Tab / Pane ownership is retained internally, but the Tab level is omitted from display. Logical parents determine display hierarchy only; resource ownership uses OS PPID exclusively. Desktop, Core, detached daemons, and containers without reliable PID bindings are not assigned fabricated measurement buckets. System scope enumerates OS processes on each machine; Tree displays machine → PPID hierarchy, treats missing parents as roots, and breaks one edge in each cycle. Process nodes show only their own resources; machine totals deduplicate by identity without counting descendants twice.
 
-Processes 使用当前范围按机器去重的进程，不先展开资源树。每个进程显示一次，使用 machine + PID + start 身份稳定标识行；同 PID 的不同机器彼此独立，PID 复用会更换行标识。多个关键词同时匹配同一行，不补入父进程，PID 支持子串匹配。支持名称、PID、CPU、内存排序，CPU/内存排序时未知值排在已知值之后，过期 CPU/内存显示 `—`。该页共用 1 Hz 样本，使用虚拟列表，不增加监听扫描。三个页签的搜索都只过滤当前范围，不触发范围扩大。
+Processes uses processes deduplicated per machine within the current scope, without first expanding the resource tree. Each process appears once, with a stable row identity of machine + PID + start; identical PIDs on different machines remain independent, and PID reuse changes the row identity. Multiple keywords must match the same row; parent processes are not added, and PID supports substring matching. Sorting supports name, PID, CPU, and memory. Unknown CPU/memory values sort after known values, and expired CPU/memory displays `—`. This page shares the 1 Hz samples, uses a virtual list, and adds no listener scans. Search in all three tabs filters only the current scope and never broadens it.
 
-Ports 提供 Endpoint / Process / PID 平表，每 5 秒按当前作用域请求 TCP 监听。Herdr 只显示受管进程的监听，System 包含受管之外的监听，没有受管终端时仍可查询本机及工作区机器。按端口号、进程名或 PID 排序，键入过滤同一行的机器、监听地址、绑定范围、进程和 PID。监听使用该次扫描的进程身份，不向新快照中复用的 PID 借用名称；Herdr 再按 machine + PID + start 筛选归属。权限不足或采集失败时保留覆盖状态，空结果不表示端口空闲。
+Ports provides a flat Endpoint / Process / PID table, requesting TCP listeners every 5 seconds for the current scope. Herdr shows only managed-process listeners; System includes unmanaged listeners and can query the local and workspace machines even without managed terminals. Sorting supports port number, process name, or PID; type-to-filter matches the machine, listener address, binding scope, process, and PID within the same row. Listeners use process identities from that scan, not names borrowed from reused PIDs in newer snapshots; Herdr further filters ownership by machine + PID + start. Insufficient permissions or collection failures retain coverage status: empty results do not mean a port is free.
 
-Tree 工具栏提供展开全部、收起全部和定位当前 pane。定位返回 Herdr Tree、清空过滤、展开目标及祖先并居中选中目标，支持终端与 Mod pane。摘要下方不显示常驻描述；机器、采样时间、错误与监听覆盖状态移到摘要 tooltip，行级状态保持不变。图标保留 tooltip 与辅助功能名称。摘要只显示当前机器，不跨机器相加。System 的可读进程计量与部分覆盖在 tooltip 中说明；内存进程合计不是系统已用内存。
+The Tree toolbar provides expand all, collapse all, and locate current pane. Locate returns to Herdr Tree, clears the filter, expands the target and its ancestors, and centers and selects the target; both terminal and Mod panes are supported. No persistent description appears below the summary; machine, sample time, errors, and listener coverage move to the summary tooltip, while row-level status remains unchanged. Icons retain tooltips and accessible names. The summary shows only the current machine, never a cross-machine sum. System's readable-process measurements and partial coverage are explained in the tooltip; summed process memory is not system-used memory.
 
-功能只读，不提供清理、结束进程或重启服务操作。不读取进程命令行、环境变量或终端内容，不持久化采样数据，不发 HTTP 请求、不转发端口。内存趋势最多保留 60 个有效点，仅存于 View 内存。
+The feature is read-only: it cannot clean up, terminate processes, or restart services. It does not read process command lines, environment variables, or terminal content; persist samples; make HTTP requests; or forward ports. Memory trends retain at most 60 valid points, stored only in View memory.
 
-### 数值排版规范
+### Numeric layout rules
 
-Task Manager 的实时数值更新不得引起水平布局位移。footer、面板摘要、Tree 与 Processes 的 CPU／Memory 都使用固定宽度、禁止 flex 收缩的数值槽、等宽字体和右对齐；不能只固定最外层宽度，内部仍按内容宽度排列。图标、分隔符、内存单位、指标标签和相邻列不随数值位数变化而左右移动，不对数值更新添加位移动画。
+Task Manager's live numeric updates must not shift horizontal layout. CPU/Memory values in the footer, panel summary, Tree, and Processes use fixed-width, non-shrinking numeric slots, monospace fonts, and right alignment. Fixing only the outer width while laying out the contents by their width is insufficient. Icons, separators, memory units, metric labels, and adjacent columns must not move horizontally as digit counts change; numeric updates have no movement animation.
 
-footer 位于命令面板提示右侧，是状态栏最后一个槽位，宽 188 px；触发按钮宽 176 px，CPU 数值槽宽 52 px，内存数值槽宽 64 px。面板摘要的 CPU／Memory 槽分别宽 64／76 px；表格保持 52／76 px。字体沿用平台等宽字体：macOS 用 Menlo，Windows 用 Consolas，其他平台用 monospace。不用空格补齐，不以省略号截断。
+The footer sits to the right of the command-palette hint as the final status-bar slot, at 188 px wide. The trigger button is 176 px wide, with a 52 px CPU numeric slot and a 64 px memory numeric slot. Panel-summary CPU/Memory slots are 64/76 px; table slots remain 52/76 px. Fonts follow the platform monospace font: Menlo on macOS, Consolas on Windows, and monospace elsewhere. Do not pad with spaces or truncate with ellipses.
 
-footer 数值最多三位数字，小数点、`%` 与单位不计入。CPU 低于 100% 保留一位小数，100% 至 999% 显示整数；舍入后超过三位时使用十进制缩写，例如 `1600% → 1.60k%`，`k%` 表示千个百分点，不改成整机归一化占用。内存按数值大小显示两位、一位或零位小数，例如 `1.24 GB / 12.4 GB / 124 GB`。单位仍按 1024 换算；舍入将产生四位整数时提前升单位，例如 `999.5 MB → 0.98 GB`。不截断或封顶采样值，颜色按未缩写的 CPU 计算；tooltip 与面板保留明细格式。
+Footer values have at most three digits, excluding the decimal point, `%`, and units. CPU below 100% keeps one decimal place; 100% through 999% uses integers. If rounding would exceed three digits, use decimal abbreviations, for example `1600% → 1.60k%`; `k%` means thousands of percentage points, not utilization normalized across the whole machine. Memory uses two, one, or zero decimal places depending on magnitude, for example `1.24 GB / 12.4 GB / 124 GB`. Units still scale by 1024; promote the unit early if rounding would produce a four-digit integer, for example `999.5 MB → 0.98 GB`. Do not truncate or cap samples. Colors use unabbreviated CPU values; tooltips and the panel retain detailed formatting.
 
-验收覆盖 `—`、`9.9% → 10.0%`、`99.9% → 100%`、`999% → 1.00k%`，以及内存的位数与单位切换。面板 CPU 保留一位小数。更新前后检查图标、分隔符、单位右边缘、内存指标标签、趋势图和列边界的位置，不要求不同字符数的文本左边缘重合。
+Acceptance covers `—`, `9.9% → 10.0%`, `99.9% → 100%`, `999% → 1.00k%`, and memory digit-count and unit transitions. Panel CPU keeps one decimal place. Compare the positions of icons, separators, unit right edges, memory metric labels, trend graphs, and column boundaries before and after updates; text with different character counts need not share a left edge.
 
-## 采集结构
+## Collection architecture
 
 ```text
 oh-my-herdr layout
-  ├─ professional-status：机器、分支、agents、Git Graph
-  ├─ professional-status hint：命令面板提示
-  └─ resource-monitor View：最右侧 footer + Popover + 单一定时器
-       ├─ collect.js：每台机器的请求合并、CPU 基线、监听缓存
-       ├─ herdr.exec → herdr-resource-sample → 一份 JSON
-       ├─ model.js：进程身份、归属、去重、汇总、未知值
-       └─ tree.js：展示树、组合筛选、虚拟行
+  ├─ professional-status: machine, branch, agents, Git Graph
+  ├─ professional-status hint: command-palette hint
+  └─ resource-monitor View: far-right footer + Popover + single timer
+       ├─ collect.js: per-machine request coalescing, CPU baselines, listener cache
+       ├─ herdr.exec → herdr-resource-sample → one JSON payload
+       ├─ model.js: process identity, ownership, deduplication, totals, unknown values
+       └─ tree.js: display tree, combined filtering, virtual rows
 ```
 
-footer 和弹层共用一个 Mod 实例，无共享 store 或第二个采样器。系统调用不在 render 或行渲染回调中执行。helper 是一次性命令，不驻留、不启动服务、不执行子命令。
+The footer and popover share one Mod instance, with no shared store or second sampler. System calls do not run in render or row-render callbacks. The helper is a one-shot command: it does not stay resident, start a service, or execute subcommands.
 
-| 方案 | 目标适配 | 复杂度与失败方式 | 运行成本 |
+| Approach | Fit for the target | Complexity and failure modes | Runtime cost |
 | --- | --- | --- | --- |
-| 每秒原生快照，当前实现 | 保留实时 CPU/内存，复用现有 exec 契约 | 一份 JSON；失败独立标记，不保留成功假象 | 有进程启动成本；本机 helper 常态约 0.55–0.61% 单核 |
-| 常驻 helper + IPC | 可消除重复启动成本 | 需要增加 IPC、版本协商、存活检测、租约和退出处理；当前宿主 exec 不提供流式子进程句柄 | 常驻内存及唤醒；本项目未实现、未实测 |
+| Native snapshot every second, current implementation | Retains live CPU/memory and reuses the existing exec contract | One JSON payload; failures are marked independently rather than appearing successful | Process startup cost; local helper typically uses about 0.55–0.61% of one core |
+| Resident helper + IPC | Can eliminate repeated startup cost | Requires IPC, version negotiation, liveness checks, leases, and exit handling; current host exec provides no streaming child-process handle | Resident memory and wakeups; not implemented or measured in this project |
 
-当前先选择一次性 helper，避免增加服务生命周期。在完整链路验收前，不声称监控成本为零或已达到 0.5% 目标。
+The current choice is a one-shot helper to avoid adding a service lifecycle. Until full-path acceptance is complete, do not claim zero monitoring cost or achievement of the 0.5% target.
 
-## 调度与生命周期
+## Scheduling and lifecycle
 
-- 活跃应用每 1000 ms 采集 CPU/内存。同机请求合并，全局最多并发两台机器，较旧快照优先。单次 exec 超时 2000 ms。
-- 应用失活不启动新采样，清除 CPU 基线和监听调度时间，拒绝在途迟到结果；恢复后的首份 CPU 为未知。
-- System 只在弹层打开且该范围被选中时采集。关闭按钮、Esc 和 Popover dismissal 都恢复 Herdr；关闭后保留 footer 的受管采样。范围切换清除旧基线、监听缓存及全机展示缓存，拒绝旧范围在途结果。
-- 只在弹层 Ports 或 Tree 页可见时采集监听，每 5000 ms 一次，范围始终跟随选择器。Tree 默认启用监听显示与搜索，不设开关。切到 Processes 或关闭弹层后暂停端口采集。搜索不改变采集范围或扫描调度。
-- 连接、终端根或机器身份改变时作废旧基线。旧连接、已移除目标、已关闭 View 的迟到结果不合入新状态。
-- View 销毁后取消 timer，释放 FocusHandle、滚动句柄和历史。不会结束用户终端。
-- footer 和弹层按实际显示值比较；数值未变时，不因新快照时间推进主动重绘。CPU、行内容、状态或趋势改变时刷新。footer 悬停时更新 tooltip。
+- Collect CPU/memory every 1000 ms while the application is active. Coalesce requests for the same machine, with at most two machines running concurrently across the instance; prioritize older snapshots. Each exec times out after 2000 ms.
+- When the application becomes inactive, start no new samples, clear CPU baselines and listener scheduling times, and reject late in-flight results. The first CPU sample after resuming is unknown.
+- Collect System scope only while the popover is open and that scope is selected. The close button, Esc, and Popover dismissal all restore Herdr; managed footer sampling continues after closing. Scope switches clear old baselines, listener caches, and whole-machine display caches, and reject in-flight results from the old scope.
+- Collect listeners only while the popover's Ports or Tree tab is visible, every 5000 ms, always following the scope selector. Tree enables listener display and search by default, with no toggle. Switching to Processes or closing the popover pauses port collection. Search does not alter collection scope or scan scheduling.
+- Connection, terminal-root, or machine-identity changes invalidate old baselines. Late results from old connections, removed targets, or closed Views are not merged into new state.
+- Destroying the View cancels the timer and releases the FocusHandle, scroll handles, and history. It does not terminate user terminals.
+- The footer and popover compare actual displayed values: unchanged values do not trigger redraws merely because a snapshot timestamp advanced. CPU, row-content, status, or trend changes refresh the display. Hovering the footer updates the tooltip.
 
-## 原生 helper
+## Native helper
 
-源码位于 `native/resource-sample/`。Rust 锁文件固定依赖，发布构建使用 LTO、符号裁剪与 panic abort。构建只写本项目 target 和 Mod bin，不构建上游仓库。
+Source lives in `native/resource-sample/`. The Rust lockfile pins dependencies; release builds use LTO, symbol stripping, and panic abort. Builds write only this project's target and Mod bin directories and do not build the upstream repository.
 
 ```sh
 node scripts/build-resource-helper.mjs
@@ -71,70 +71,70 @@ mods/resource-monitor/bin/herdr-resource-sample --roots=123,456 --scope=herdr --
 mods/resource-monitor/bin/herdr-resource-sample --roots= --scope=system --ports
 ```
 
-Windows 生成 `.exe`。省略 `--scope` 默认 Herdr；System 不受 roots 限制，采集所有可枚举进程的可读指标。`--ports` 在当前范围补充监听。移除旧 `--all-ports` 参数，不保留兼容路径。空 roots 在 Herdr 返回空集合，在 System 仍枚举全机。未知参数、非法范围和非法 PID 返回非零状态。原生 helper 与 Mod 必须配套构建、部署。
+Windows produces an `.exe`. Omitting `--scope` defaults to Herdr; System ignores roots and collects readable metrics for all enumerable processes. `--ports` adds listeners within the current scope. The old `--all-ports` argument is removed, with no compatibility path. Empty roots return an empty set in Herdr but still enumerate the whole machine in System. Unknown arguments, invalid scopes, and invalid PIDs return a nonzero status. The native helper and Mod must be built and deployed together.
 
-| 平台 | 拓扑 / 身份 | CPU / 内存 | 监听 |
+| Platform | Topology / identity | CPU / memory | Listeners |
 | --- | --- | --- | --- |
-| macOS | Herdr 按根 PID 查询子进程，System 枚举全机；BSDInfo 启动时间 | pidrusage 累计 CPU、resident、footprint；Mach ticks 按 timebase 换算；读取后重查启动身份 | libproc FD 与 SocketFDInfo |
-| Linux | `/proc/PID/stat` 的 PPID 与 starttime | utime/stime、CLK_TCK、RSS pages；meminfo | TCP 表与 FD socket inode 关联 |
-| Windows | Toolhelp；GetProcessTimes 创建时间 | 累计 FILETIME CPU、Working Set；GlobalMemoryStatusEx | GetExtendedTcpTable |
+| macOS | Herdr queries descendants by root PID; System enumerates the whole machine; BSDInfo start time | pidrusage cumulative CPU, resident, footprint; Mach ticks converted using timebase; recheck start identity after reading | libproc FD and SocketFDInfo |
+| Linux | PPID and starttime from `/proc/PID/stat` | utime/stime, CLK_TCK, RSS pages; meminfo | TCP tables associated with FD socket inodes |
+| Windows | Toolhelp; GetProcessTimes creation time | Cumulative FILETIME CPU, Working Set; GlobalMemoryStatusEx | GetExtendedTcpTable |
 
-macOS 的 Herdr 常态不逐个查询全机 BSDInfo。无子进程时清零 errno，避免 libproc 将合法空列表误判为失败。System 覆盖状态不依赖是否开启 Ports；元数据不可读时保留 PID 和未知占位，指标不可读保持 null。监听单独保留错误状态，并在归属前复查进程身份。
+Normal macOS Herdr collection does not query BSDInfo for every process on the machine. Clear errno when there are no children so libproc does not misclassify a valid empty list as a failure. System coverage does not depend on Ports being enabled; unreadable metadata retains the PID and unknown placeholders, and unreadable metrics remain null. Listeners retain independent error status and recheck process identity before ownership assignment.
 
-### JSON 契约
+### JSON contract
 
-顶层：`schema: 1`、`platform`、`monotonic`（秒）、`topologyComplete`、`rows`、`host`、`listeners`、`listenerError`。
+Top-level fields: `schema: 1`, `platform`, `monotonic` (seconds), `topologyComplete`, `rows`, `host`, `listeners`, and `listenerError`.
 
-每个进程包含：`pid`、`ppid`、`name`、`start`（稳定身份或 null）、`seconds`（累计 CPU 秒）、`memory`（resident / working set 字节）、`footprint`（macOS 字节）。不可读计量为 null，禁止替换成零。
+Each process contains `pid`, `ppid`, `name`, `start` (stable identity or null), `seconds` (cumulative CPU seconds), `memory` (resident / working set bytes), and `footprint` (macOS bytes). Unreadable metrics are null and must not be replaced with zero.
 
-监听通道为 null，或 `{ rows, complete, scope }`；scope 为 `managed` 或 `all`。端点包含 `pid`、`family`、`address`、`port`、`protocol: tcp`、`socket`。仅在内核返回共享 socket 身份时据此去重；相同端口号不能证明是同一个 socket。
+The listener channel is null or `{ rows, complete, scope }`, with scope `managed` or `all`. Endpoints contain `pid`, `family`, `address`, `port`, `protocol: tcp`, and `socket`. Deduplicate by shared socket identity only when the kernel returns it; matching port numbers do not prove sockets are identical.
 
-主机通道为 `{ total, available }`，单位字节。macOS 当前只返回 total，available 为 null；不会用 free 或受管进程之和代替主机可用内存。监听失败不丢弃独立有效的 CPU/内存结果。
+The host channel is `{ total, available }`, in bytes. macOS currently returns only total, with available null; free memory or summed managed-process memory is not substituted for host-available memory. Listener failures do not discard independently valid CPU/memory results.
 
-## 归属、计量与未知值
+## Ownership, measurement, and unknown values
 
-身份使用 machine + PID + start。嵌套终端根的后代归最近根；终端详情不重复纳入嵌套根的资源。上层按进程身份去重。重复根无法唯一归属时保留冲突和机器级已知小计，不任意指定 owner。
+Identity is machine + PID + start. Descendants of nested terminal roots belong to the nearest root; terminal details do not count nested-root resources again. Higher levels deduplicate by process identity. If duplicate roots prevent unique ownership, retain the conflict and the machine-level known subtotal rather than arbitrarily assigning an owner.
 
-CPU = 累计 CPU 秒差 / 单调时间秒差 × 100。100% 代表一核。首次、缺失 start、PID 复用、计数回退、时间不前进或快照间隔超过 3 秒时显示未知。进程样本超过 3 秒后不计入实时 footer。
+CPU = change in cumulative CPU seconds / change in monotonic seconds × 100. 100% represents one core. CPU is unknown for first samples, missing start identities, PID reuse, counter rollback, non-advancing time, or snapshot gaps over 3 seconds. Process samples older than 3 seconds are excluded from the live footer.
 
-macOS 主列、排序、趋势统一使用 Footprint，详情保留 RSS。Linux 为 RSS，Windows 为 Working Set。KB / MB / GB 的进位与 Orca 一致，按 1024 换算；未知显示 `—`，覆盖不完整时在 tooltip 和弹层中说明已知小计。相加仍可能重复共享页，不代表主机占用。
+On macOS, the main column, sorting, and trends consistently use Footprint; details retain RSS. Linux uses RSS, and Windows uses Working Set. KB / MB / GB scale by 1024, as in Orca. Unknown values display `—`; incomplete coverage is explained as a known subtotal in the tooltip and popover. Summation can still double-count shared pages and does not represent host usage.
 
-Herdr 与 System 的节点 ID 和趋势相互独立。System 的机器趋势不因普通进程增减重置；进程趋势在 PID 复用时重置。完整覆盖且内存可读的新样本才追加趋势，缺失指标与错误样本不补零。
+Herdr and System have independent node IDs and trends. System machine trends do not reset for ordinary process additions or removals; process trends reset on PID reuse. Only new samples with complete coverage and readable memory append a trend point; missing metrics and error samples are not filled with zero.
 
-监听有独立时间、拓扑与进程启动身份。CPU-only tick 保留该次监听元数据，不借用新 PID 的名字或资源。旧监听不能挂到复用的 PID。搜索无匹配不表示端口空闲；覆盖不足时明确显示。回环与通配地址只说明绑定范围，不证明服务可达。
+Listeners have their own timestamp, topology, and process-start identities. CPU-only ticks retain metadata from the listener scan instead of borrowing names or resources from new PIDs. Old listeners must not attach to reused PIDs. No search matches do not mean a port is free; insufficient coverage is explicitly displayed. Loopback and wildcard addresses indicate binding scope only, not service reachability.
 
-## 安装与分发
+## Installation and distribution
 
-本机构建产物为 `mods/resource-monitor/bin/herdr-resource-sample[.exe]`，随安装器部署。源码检出后必须先构建；缺少 helper 时安装预检失败。POSIX 安装要求 owner execute 位；失败回滚同时恢复原字节与权限。生成二进制和 target 忽略入库，许可证随 Mod 部署。
+The local build artifact is `mods/resource-monitor/bin/herdr-resource-sample[.exe]`, deployed by the installer. Source checkouts must build it first; a missing helper fails installation preflight. POSIX installation requires the owner-execute bit; failure rollback restores both original bytes and permissions. Generated binaries and target are excluded from version control; licenses are deployed with the Mod.
 
-远端需要为该 OS/架构构建并将 helper 放入 PATH。当前不自动安装远端软件，不提权。helper 缺失、格式错误、非零退出或超时显示错误，不退回 ps/top/lsof/PowerShell。当前 native schema 与 JS collector 必须配套更新。
+Remote machines require a helper built for their OS/architecture and placed in PATH. Remote software is not currently installed automatically, and privileges are not elevated. Missing helpers, malformed output, nonzero exits, and timeouts display errors, with no fallback to ps/top/lsof/PowerShell. The native schema and JS collector must currently be updated together.
 
-## 性能口径
+## Performance criteria
 
-性能采样命令和测量边界见[开发指南](../development.md#资源采集性能测量)。以下为历史测量，不代表后续版本或当前运行环境的性能。
+See the [development guide](../development.md#resource-collection-performance-measurement) for performance sampling commands and measurement boundaries. The following measurements are historical and do not establish performance for later versions or the current environment.
 
-2026-11-11，macOS arm64，9 个受管根，采样期间后代数量变化，末次约 21 个进程。三种模式分别持续 30 秒，1 Hz；监听模式每 5 秒扫描一次。CPU 为单核百分比。
+On 2026-11-11, macOS arm64, with 9 managed roots, descendant counts varied during sampling and ended at about 21 processes. Each of three modes ran for 30 seconds at 1 Hz; listener modes scanned every 5 seconds. CPU is expressed as a percentage of one core.
 
-| 模式 | helper CPU 均值 / 次 | helper 单核占用 | 峰值 RSS | 单次 wall p95 |
+| Mode | Mean helper CPU / invocation | Helper single-core utilization | Peak RSS | Invocation wall p95 |
 | --- | ---: | ---: | ---: | ---: |
 | footer | 6.09 ms | 0.61% | 1.86 MiB | 20.2 ms |
-| PTYs，受管监听 | 5.48 ms | 0.55% | 1.88 MiB | 36.3 ms |
-| 显式全机端口搜索 | 9.32 ms | 0.93% | 3.92 MiB | 33.6 ms |
+| PTYs, managed listeners | 5.48 ms | 0.55% | 1.88 MiB | 36.3 ms |
+| Explicit whole-machine port search | 9.32 ms | 0.93% | 3.92 MiB | 33.6 ms |
 
-二进制 336624 字节。测量控制器使用 POSIX spawn，单独记录 Python 控制器约 0.15–0.19% 单核；该控制器不是生产 JS。不同模式有负载变化，不据此宣称监听比 footer 更快。
+The binary was 336624 bytes. The measurement controller used POSIX spawn; the Python controller was separately recorded at about 0.15–0.19% of one core and is not production JS. Loads differed between modes, so these results do not establish that listener collection is faster than the footer.
 
-参考 Node 测试中，约 865 条全机元数据、9 个根的 JSON 解析、资源模型、展开树投影执行 1000 次，约 0.77 ms CPU / 次。该数值不含进程启动、Herdr IPC 或 GPUI，不能直接加总为生产性能。
+In a reference Node test, JSON parsing, the resource model, and expanded-tree projection for about 865 whole-machine metadata rows and 9 roots ran 1000 times, taking about 0.77 ms CPU per invocation. This excludes process startup, Herdr IPC, and GPUI and cannot simply be added up as production performance.
 
-隔离原生应用另做了短测：一个终端、两个进程，后台测试副本强制活动，每种状态持续 10 秒。通过 `proc_pid_rusage` 读取 App 自身及已回收子进程累计 CPU，包括实际 exec、JS 与原生绘制。以下为单次顺序测量，基线包含其他 Mods；增量是相对暂停采集的差值，不是生产成本上限。该测量使用原来的内存与终端数 footer；直接显示 CPU 后尚未重测。
+A separate short test used an isolated native application: one terminal, two processes, with a background test copy forced active, each state lasting 10 seconds. `proc_pid_rusage` read cumulative CPU for the App itself and reaped children, including actual exec, JS, and native drawing. The following is a single sequential measurement; the baseline includes other Mods, and the increment is relative to paused collection, not an upper bound on production cost. This measurement used the old memory-and-terminal-count footer; it has not been repeated since CPU was displayed directly.
 
-| 原生应用状态 | App 与子进程单核占用 | 相对暂停基线增量 |
+| Native application state | App and child-process single-core utilization | Increment over paused baseline |
 | --- | ---: | ---: |
-| 暂停监控 | 0.47% | — |
+| Monitoring paused | 0.47% | — |
 | footer | 1.43% | 0.95% |
-| Resources 弹层，数值稳定 | 1.36% | 0.89% |
+| Resources popover, stable values | 1.36% | 0.89% |
 
-按显示值抑制重绘前，相同场景的弹层增量约 2.19%；应用该优化后为约 0.89%。两轮基线存在变化，不能把差值当作固定收益。活跃负载下显示值可能每秒改变，仍需单独测量。
+Before suppressing redraws based on displayed values, the popover increment in the same scenario was about 2.19%; after that optimization, it was about 0.89%. Baselines differed between rounds, so the difference is not a fixed benefit. Displayed values may change every second under active load, which still requires separate measurement.
 
-目标为完整链路稳态不超过 0.5% 单核，验收上限 1%，helper 峰值 RSS 不超过 10 MiB。上述受管场景的历史 helper 短测满足 1% 与 10 MiB 上限；原生应用短测增量接近 1% 上限，0.5% 目标尚未达到。完整链路未验收，尤其是 tooltip 悬停、数据频繁变化的弹层、远端 exec 包装与多机器并发。
+The full-path steady-state target is at most 0.5% of one core, with an acceptance ceiling of 1% and helper peak RSS at most 10 MiB. The historical short helper tests above for managed scenarios met the 1% and 10 MiB ceilings; the native application's short-test increment approached the 1% ceiling, and the 0.5% target has not been met. Full-path acceptance remains incomplete, particularly tooltip hover, popovers with frequently changing data, remote exec wrappers, and concurrent machines.
 
-2026-11-12 新增 System 范围后，在 macOS arm64 用 `--roots= --scope system --samples=10 --ports-every=5` 短测，1 Hz，历时 10.00 秒。末次枚举 939 个进程，其中 730 个内存可读。helper 单核占用 1.55%，CPU 均值 15.52 ms／次，wall p95 为 210.45 ms，峰值 RSS 为 3.98 MiB，最大 JSON 为 134556 字节。Python 控制器另占约 0.37% 单核。该结果不含 Herdr IPC、生产 JS 和 GPUI；System helper 已超过上述 1% 上限，不能声明全链路性能达标。全机采集保持显式、面板内启用，不扩大默认 footer 的采集范围。
+After adding System scope on 2026-11-12, a short macOS arm64 test used `--roots= --scope system --samples=10 --ports-every=5` at 1 Hz for 10.00 seconds. The final enumeration contained 939 processes, 730 with readable memory. Helper single-core utilization was 1.55%, mean CPU was 15.52 ms per invocation, wall p95 was 210.45 ms, peak RSS was 3.98 MiB, and maximum JSON size was 134556 bytes. The Python controller separately used about 0.37% of one core. This excludes Herdr IPC, production JS, and GPUI. The System helper already exceeds the 1% ceiling above, so full-path performance compliance cannot be claimed. Whole-machine collection remains explicit and enabled within the panel; it does not broaden the default footer's collection scope.

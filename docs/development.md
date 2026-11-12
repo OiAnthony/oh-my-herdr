@@ -1,25 +1,31 @@
-# 开发指南
+# Development guide
 
-本文面向维护 oh-my-herdr 的开发者。所有命令均从本仓库根目录执行；用户安装与配置见 [README](../README.md)，资源采集架构与协议见[资源监控设计](design/resource-monitor.md)。
+This guide is for developers maintaining oh-my-herdr. Run all commands from the repository root. See the [README](../README.md) for user installation and configuration, and the [resource monitoring design](design/resource-monitor.md) for the collection architecture and protocol.
 
-## 环境与目录
+## Documentation language
 
-需要 Node.js、Rust 工具链和可从终端运行的 `herdr-app`。目标宿主为 Herdr Desktop 0.1.15；macOS 构建还需要 Xcode Command Line Tools。测试使用 Node 内置的 `node:test`，不需要安装 npm 依赖。
+Default documentation and the Gallery recipe are written in English. The Chinese README is `README.zh-CN.md`. Keep installation, configuration, and development instructions aligned between `README.md` and `README.zh-CN.md` whenever either changes.
 
-| 路径 | 职责 |
+Gallery text lives in `RECIPE.md`. Local edits alone do not update the live Gallery: publication requires an authorized push to the public repository and Gallery reindexing. See the Gallery's [Share yours instructions](https://herdr.dev/gallery/) for repository and package requirements. Editing these files does not publish them.
+
+## Environment and directory structure
+
+You need Node.js, the Rust toolchain, and `herdr-app` available in the terminal. The target host is Herdr Desktop 0.1.15; macOS builds also require Xcode Command Line Tools. Tests use Node's built-in `node:test`, with no npm dependencies to install.
+
+| Path | Responsibility |
 | --- | --- |
-| `mods/` | 八个可独立部署的 Mod；入口、图标及许可留在各自目录 |
-| `layouts/` | oh-my-herdr 布局及布局选择器 SVG |
-| `native/resource-sample/` | Rust 采集程序及依赖锁文件 |
-| `scripts/` | helper 构建、白名单 ZIP 打包、发布包预检及性能测量工具 |
-| `tests/` | Node 行为测试、安装器事务测试及真实 native helper 测试 |
-| `docs/design/` | 设计、协议和性能口径 |
+| `mods/` | Eight independently deployable Mods, each retaining its entry point, icons, and licenses |
+| `layouts/` | The oh-my-herdr layout and layout selector SVG |
+| `native/resource-sample/` | Rust collector and dependency lockfile |
+| `scripts/` | Helper build, allowlisted ZIP packaging, release package preflight, and performance measurement tools |
+| `tests/` | Node behavior tests, installer transaction tests, and real native helper tests |
+| `docs/design/` | Design, protocol, and performance criteria |
 
-根目录保留 Gallery 资源、套件清单、快捷键规则和安装入口。不要把测试放进 `mods/`，安装器会递归复制 Mod 文件。源码向应用 home 单向部署；个人配置、会话、采样状态及应用生成的类型不进入仓库。
+The root retains Gallery assets, the suite manifest, shortcut rules, and installation entry points. Do not put tests in `mods/`: the installer copies Mod files recursively. Deployment is one-way from source to application home; personal configuration, sessions, sample state, and application-generated types do not belong in the repository.
 
-## 目录整理验收
+## Directory organization acceptance
 
-按顺序执行：
+Run these commands in order:
 
 ```sh
 node scripts/build-resource-helper.mjs
@@ -27,55 +33,55 @@ node --test tests/*.test.mjs
 ./install.sh --dry-run
 ```
 
-第一条命令以 `--release --locked` 构建当前平台 helper，输出 `mods/resource-monitor/bin/herdr-resource-sample` 路径，Windows 文件名带 `.exe`。构建只写本项目的 Rust `target/` 和 Mod `bin/`；二者的生成内容由 `.gitignore` 排除。
+The first command builds the current platform's helper with `--release --locked` and prints the path `mods/resource-monitor/bin/herdr-resource-sample`, with an `.exe` suffix on Windows. The build writes only to this project's Rust `target/` and Mod `bin/` directories; generated contents in both are excluded by `.gitignore`.
 
-第二条命令应以零退出码结束且没有失败测试。`resource-native.test.mjs` 会执行刚构建的 helper，创建临时子进程与 IPv4/IPv6 回环监听，并在测试后清理；它不能由 JSON 解析测试替代。安装器测试使用临时源目录和应用 home，不部署到日常应用目录。
+The second command should exit with code zero and no failed tests. `resource-native.test.mjs` runs the newly built helper, creates temporary child processes and IPv4/IPv6 loopback listeners, and cleans them up after testing. JSON parsing tests are not a substitute. Installer tests use temporary source directories and application homes rather than deploying into the everyday application directory.
 
-第三条命令只读预检并打印 install/check 命令，不编译、安装、切换布局或重启。它要求已构建的 helper、可用的 Node 与 `herdr-app`，以及初始化过的目标 app home。dry-run 成功不等于实际部署或原生加载成功。
+The third command performs a read-only preflight and prints install/check commands. It does not compile, install, switch layouts, or restart. It requires a built helper, working Node and `herdr-app`, and an initialized target app home. A successful dry run does not establish successful deployment or native loading.
 
-## macOS 发布 ZIP
+## macOS release ZIP
 
-套件版本由 `oh-my-herdr.json` 的 `version` 提供，目前为 0.4.0。helper 行为未改变，其 crate 版本仍为 0.1.0。在原生 arm64 或 x64 Mac 的源码根执行：
+The suite version comes from `version` in `oh-my-herdr.json`, currently 0.4.0. Helper behavior has not changed, so its crate version remains 0.1.0. From the source root on a native arm64 or x64 Mac, run:
 
 ```sh
 node scripts/package-release.mjs
 node --test tests/oh-my-herdr.test.mjs tests/open-with.test.mjs tests/local-icons.test.mjs tests/release-package.test.mjs
 ```
 
-打包器显式构建当前架构 helper，从 Node 官方下载固定 26.13.1 tarball，核对代码中固定的 SHA256，然后只提取 `bin/node` 和完整 `LICENSE`。下载使用 macOS 自带 curl，可沿用构建环境的代理设置；只发生在发布端，不在用户安装时发生。包名为 `dist/oh-my-herdr-0.4.0-darwin-arm64.zip` 或 `dist/oh-my-herdr-0.4.0-darwin-x64.zip`，并生成 `dist/SHA256SUMS`。`dist/` 与私有临时打包目录被忽略，二进制不入源码 Git。
+The packager explicitly builds the helper for the current architecture, downloads the pinned Node 26.13.1 tarball from the official Node source, checks the SHA256 pinned in code, then extracts only `bin/node` and the complete `LICENSE`. Downloads use macOS's built-in curl and can use the build environment's proxy settings. They occur only during release packaging, not user installation. The package is named `dist/oh-my-herdr-0.4.0-darwin-arm64.zip` or `dist/oh-my-herdr-0.4.0-darwin-x64.zip`, with `dist/SHA256SUMS` also generated. `dist/` and the private temporary packaging directory are ignored; binaries are not committed to source Git.
 
-已校验的 Node tarball 缓存在忽略目录 `.release-cache/`，后续构建仍逐次核对固定 SHA256；缓存不进入 ZIP。若缓存校验失败，删除报错的缓存文件后重新构建，不跳过校验。
+Verified Node tarballs are cached in the ignored `.release-cache/` directory. Subsequent builds still check the pinned SHA256 every time; the cache is not included in the ZIP. If cache verification fails, delete the cache file identified in the error and rebuild rather than skipping verification.
 
-白名单只收录明确的安装器依赖、文档/许可、跟踪中的布局和八个 Mods 的代码、SVG、metadata 与许可，以及本次构建的 helper。不会复制 `.git`、tests、Rust target、个人 apps/hosts 配置、data、会话、shared/log/window 状态、生成声明或本机应用 PNG。`release.json` 是包内容校验清单，不是第二套安装归属记录；配置目录仍只用原来的 `.oh-my-herdr/installed.json`。同源 SHA256 不是独立签名。
+The allowlist includes only explicit installer dependencies, documentation/licenses, tracked layouts, the eight Mods' code, SVGs, metadata, and licenses, and the helper built for this package. It excludes `.git`, tests, Rust target, personal apps/hosts configuration, data, sessions, shared/log/window state, generated declarations, and local application PNGs. `release.json` is a package content verification manifest, not a second installation ownership record; configuration ownership continues to use only `.oh-my-herdr/installed.json`. SHA256 from the same source is not an independent signature.
 
-发布包测试从最终 ZIP 解压到包含空格和中文的目录，执行真实私有 Node 与安装器。测试将系统 Node、Cargo、下载工具和编译器替换为禁止调用的哨兵，Herdr CLI 使用边界替身；它验证损坏、架构、冲突、更新/卸载和配置恢复，不等于真实 Mod 加载或 Gatekeeper 验收。运行这些测试前必须先构建 ZIP，缺包时测试失败而不静默跳过。
+Release package tests extract the final ZIP into a directory containing spaces and Chinese characters, then execute the real private Node and installer. They replace system Node, Cargo, download tools, and compilers with sentinels that prohibit invocation, while using a boundary test double for the Herdr CLI. They verify corruption, architecture, conflicts, update/uninstall, and configuration restoration, not real Mod loading or Gatekeeper acceptance. Build the ZIP before running these tests: a missing package fails the tests rather than silently skipping them.
 
-实际加载验证需另外使用 Herdr 初始化过的隔离 app home，设置同一个 `HERDR_APP_HOME`，从最终解压目录执行 `./install.sh`、`./install.sh --check`、`./install.sh --uninstall`。不得部署到日常 home、切换日常布局或重启当前服务。真实八 Mod 加载不需要改动 Mod UI，本次安装任务也不以此声称窗口交互已验收。
+Actual loading validation separately requires an isolated app home initialized by Herdr. Set the same `HERDR_APP_HOME` and run `./install.sh`, `./install.sh --check`, and `./install.sh --uninstall` from the final extracted directory. Do not deploy into the everyday home, switch the everyday layout, or restart the current service. Real loading of all eight Mods does not require changing Mod UI, and this installation task does not establish acceptance of window interactions.
 
-GitHub Actions 的 `.github/workflows/release.yml` 在 `macos-15`（arm64）和 `macos-15-intel`（x64）分别构建并测试最终 ZIP，合并后重新生成两个 ZIP 的 `SHA256SUMS`。手动运行只生成 artifacts；`v<version>` tag 才创建 GitHub Release，并校验 tag 与套件版本一致。实现工作流不等于获准运行或发布它。没有签名、公证、DMG、自动更新服务或系统 PATH 安装。
+GitHub Actions in `.github/workflows/release.yml` builds and tests the final ZIP on `macos-15` (arm64) and `macos-15-intel` (x64), then regenerates `SHA256SUMS` for the two combined ZIPs. Manual runs produce artifacts only; a `v<version>` tag creates a GitHub Release after checking that the tag matches the suite version. Implementing the workflow does not authorize running it or publishing a release. There is no signing, notarization, DMG, automatic update service, or system PATH installation.
 
-私有 Node 要求 macOS 13.5+。本机某一架构通过不代表另一架构通过；未安装 CLT 的干净 Mac、浏览器下载 quarantine 与手动安全许可流程须单独验收，不能用隔离 PATH 测试代替。
+Private Node requires macOS 13.5+. Passing on one local architecture does not establish success on the other. A clean Mac without CLT, browser download quarantine, and the manual security approval flow require separate acceptance; isolated PATH tests are not a substitute.
 
-## 修改 Rust 采集程序
+## Modifying the Rust collector
 
-修改 native 代码后，除上述验收外，按改动范围运行：
+After changing native code, run the following as appropriate for the change, in addition to the acceptance steps above:
 
 ```sh
 cargo test --locked --manifest-path native/resource-sample/Cargo.toml
 cargo fmt --check --manifest-path native/resource-sample/Cargo.toml
 ```
 
-需要检查 Linux / Windows 编译时，先安装相应 Rust target，再执行：
+To check Linux / Windows compilation, install the corresponding Rust targets first, then run:
 
 ```sh
 cargo check --locked --manifest-path native/resource-sample/Cargo.toml --target x86_64-unknown-linux-gnu --target x86_64-pc-windows-gnu
 ```
 
-交叉编译检查不代表目标平台运行通过。本机测试只证明当前 OS 与架构的行为。
+Cross-compilation checks do not establish successful execution on the target platform. Local tests establish behavior only for the current OS and architecture.
 
-## 资源采集性能测量
+## Resource collection performance measurement
 
-先构建 helper。将下列命令中的 `123,456` 替换为待测终端的真实根 PID；Python 测量脚本依赖 POSIX `resource` 模块，不用于 Windows。
+Build the helper first. Replace `123,456` in the commands below with the actual root PIDs of the terminals to measure. The Python measurement script depends on the POSIX `resource` module and is not for Windows.
 
 ```sh
 python3 scripts/bench-resource-helper.py --roots=123,456 --samples=30
@@ -83,12 +89,12 @@ python3 scripts/bench-resource-helper.py --roots=123,456 --samples=30 --ports-ev
 python3 scripts/bench-resource-helper.py --roots= --samples=30 --scope system --ports-every=5
 ```
 
-脚本输出 JSON，分别统计 helper CPU、wall time、峰值 RSS、输出大小和 Python 控制器 CPU。默认采样间隔为 1 秒；三条命令分别测受管资源、受管监听和全机资源加监听。System 不依赖 roots；`lastRows` 与 `lastMeasuredProcesses` 分别记录末次枚举和可读内存的进程数。结果不含 Herdr IPC、生产 JavaScript 或 GPUI，不能据此宣称完整链路性能达标。历史测量条件与数值见[设计文档](design/resource-monitor.md#性能口径)。
+The script outputs JSON measuring helper CPU, wall time, peak RSS, output size, and Python controller CPU separately. The default sampling interval is 1 second. The three commands measure managed resources, managed listeners, and system-wide resources plus listeners, respectively. System does not depend on roots; `lastRows` and `lastMeasuredProcesses` record the final counts of enumerated processes and processes with readable memory, respectively. Results exclude Herdr IPC, production JavaScript, and GPUI, so they do not establish end-to-end performance compliance. See the [design document](design/resource-monitor.md#performance-criteria) for historical measurement conditions and values.
 
-## Mod 与布局的实机验证
+## Validating Mods and layouts in the application
 
-仅整理测试和文档时，不需要部署到日常应用或切换当前布局。修改 Mod 或布局行为时，另行使用获准的隔离应用 home 和 Core 会话验证，遵循 [RECIPE 验收清单](../RECIPE.md#done-when)。
+Reorganizing tests and documentation alone does not require deployment into the everyday application or switching the current layout. When changing Mod or layout behavior, validate separately using an authorized isolated application home and Core session, following the [RECIPE acceptance checklist](../RECIPE.md#done-when).
 
-隔离应用 home 必须先由目标版本 Herdr 初始化，不能用空目录替代。按 [README](../README.md#配置) 统一设置 `HERDR_APP_HOME` 后执行安装和检查；启用布局、卸载前切回内置布局分别按 README 操作，不在测试脚本里隐式切换。
+The isolated application home must first be initialized by the target Herdr version; an empty directory is not a substitute. Set `HERDR_APP_HOME` consistently as described in the [README](../README.md#configuration), then install and check. Follow the README to activate the layout and switch back to a built-in layout before uninstalling; do not switch implicitly from test scripts.
 
-`herdr-app check` 只验证部署与初始加载。真实窗口还需检查布局、异步成功及失败、筛选、排序、键盘焦点、Esc、滚动、主题和窄窗口。Linux / Windows 资源采集、Remote - SSH 以及尚未完成的物理输入验收必须分别记录，不以本机测试或静态加载通过代替。
+`herdr-app check` verifies only deployment and initial loading. The real window also needs checks for layout, asynchronous success and failure, filtering, sorting, keyboard focus, Esc, scrolling, themes, and narrow windows. Record Linux / Windows resource collection, Remote - SSH, and any outstanding physical-input acceptance separately; local tests or successful static loading cannot replace them.

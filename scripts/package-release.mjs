@@ -17,7 +17,7 @@ const nodeHashes = {
 const hash = bytes => createHash("sha256").update(bytes).digest("hex");
 // Exact installer/document dependencies; Mod files come only from tracked, allowed paths.
 const entries = ["install.sh", "oh-my-herdr.mjs", "oh-my-herdr.json", "keybindings.json", "LICENSE", "NOTICE",
-  "THIRD_PARTY.md", "README.md", "RECIPE.md", "CHANGELOG.md", "preview.png", "docs/development.md", "docs/design/resource-monitor.md",
+  "THIRD_PARTY.md", "README.md", "README.zh-CN.md", "RECIPE.md", "CHANGELOG.md", "preview.png", "docs/development.md", "docs/design/resource-monitor.md",
   "scripts/validate-package.mjs", "scripts/cache-app-icons.mjs", "scripts/export-app-icons.jxa"];
 
 async function checksums() {
