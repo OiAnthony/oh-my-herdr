@@ -1,0 +1,76 @@
+name: macOS ZIP releases
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: arm64
+          - runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.13.1'
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify native runner and release version
+        env:
+          EXPECTED_ARCH: ${{ matrix.arch }}
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const {version} = JSON.parse(fs.readFileSync("oh-my-herdr.json"));
+            if (process.arch !== process.env.EXPECTED_ARCH) throw new Error("Wrong native runner architecture");
+            if (process.env.GITHUB_REF_TYPE === "tag" && process.env.GITHUB_REF_NAME !== `v${version}`) throw new Error("Tag/manifest version mismatch");
+          '
+      - name: Build final ZIP with verified official Node
+        run: node scripts/package-release.mjs
+      - name: Test installer and final extracted package
+        run: node --test tests/oh-my-herdr.test.mjs tests/open-with.test.mjs tests/local-icons.test.mjs tests/release-package.test.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zip-${{ matrix.arch }}
+          path: dist/*.zip
+          if-no-files-found: error
+
+  release:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26.13.1'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: zip-*
+          path: dist
+          merge-multiple: true
+      - name: Generate final combined checksums
+        run: node scripts/package-release.mjs --checksums
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-release
+          path: |
+            dist/*.zip
+            dist/SHA256SUMS
+          if-no-files-found: error
+      - name: Publish tagged release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.zip dist/SHA256SUMS --verify-tag --title "oh-my-herdr $GITHUB_REF_NAME" --generate-notes

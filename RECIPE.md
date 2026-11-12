@@ -1,6 +1,6 @@
 # oh-my-herdr
 
-oh-my-herdr 是 Herdr Desktop 的完整工作区布局：左侧管理 Spaces 和 Agents，右上角启动 Agent 或用编辑器打开仓库，底部查看 Git 历史及受管终端的 CPU、内存。八个独立 Mods 由布局组合，不替换 Herdr 本体。目标版本为 Herdr Desktop 0.1.15，快捷键按 macOS 编写。
+oh-my-herdr 0.4.0 是 Herdr Desktop 的完整工作区布局：左侧管理 Spaces 和 Agents，右上角启动 Agent 或用编辑器打开仓库，底部查看 Git 历史及受管终端的 CPU、内存。八个独立 Mods 由布局组合，不替换 Herdr 本体。目标版本为 Herdr Desktop 0.1.15，快捷键按 macOS 编写。
 
 ![oh-my-herdr 布局](preview.png)
 
@@ -92,11 +92,15 @@ Mods 通过 `herdr` 读取 spaces、panes、terminals、agents、focused、theme
 
 先读目标应用 home 的 AGENTS.md、生成类型、本 recipe 及实际文件，向用户说明程序执行、网络、文件读写和快捷键变更。不要仅因它出现在 Gallery 就认定安全。
 
-检查 Node.js、Cargo 与 `herdr-app` 已安装。macOS 编译还需 Xcode Command Line Tools。在可信源码根执行：
+普通用户使用 macOS 13.5+ 的对应架构发布 ZIP，内含官方固定版本 Node.js 26.13.1、预编译 helper 与完整许可；无需安装 Node、Rust、Cargo、Git 或 Xcode。在初始化过的 Herdr home 中安装，终端须能运行 `herdr-app`。从 [Releases](https://github.com/OiAnthony/oh-my-herdr/releases) 下载 ZIP 并核对 `SHA256SUMS` 后，解压并在包根目录执行：
 
 ```sh
-node scripts/build-resource-helper.mjs && node oh-my-herdr.mjs install && node oh-my-herdr.mjs check
+./install.sh --switch
 ```
+
+不加 `--switch` 不切换布局，不重启应用。ZIP 未签名、未公证，macOS 可能阻止 Node/helper；核对来源后按「隐私与安全性」提示手动允许，不清除 quarantine、不关闭 Gatekeeper。Git 功能仍需可用 Git，编辑器/Agent 仍由用户安装。版本未发布时，维护者按开发指南构建 ZIP，不能把 Source code ZIP 当成发布包。
+
+源码开发者仍需 Node.js、Cargo，macOS 需 Xcode Command Line Tools；先显式运行 `node scripts/build-resource-helper.mjs`，再运行 `./install.sh`。安装器不自动编译，也不下载依赖；损坏的 ZIP 不回退到全局 Node。
 
 自定义应用目录时，对所有命令统一设置 `HERDR_APP_HOME`。安装器要求已有完整 `keys.json`，按绑定合并 [keybindings.json](keybindings.json)，并在 `.oh-my-herdr/installed.json` 中记录文件哈希与快捷键原值。它不切换布局或重启应用。
 
@@ -108,7 +112,7 @@ node scripts/build-resource-helper.mjs && node oh-my-herdr.mjs install && node o
 herdr-app do layout.switch '{"name":"oh-my-herdr"}'
 ```
 
-安装器也负责后续更新和卸载。卸载前切回内置布局并关闭套件窗格；之后运行 `node oh-my-herdr.mjs uninstall`。它恢复未修改的受管快捷键，保留个人配置和状态。完整操作见 [README](README.md)。
+更新时下载新版 ZIP，在新解压目录运行 `./install.sh`。卸载前切回内置布局并关闭套件窗格；之后在包目录运行 `./install.sh --uninstall`。更新/检查/卸载均使用私有 Node，不要求系统 Node。仍复用 `.oh-my-herdr/installed.json`，恢复未修改的受管快捷键，保留个人配置与状态。完整命令见 [README](README.md)。
 
 从空目录重建时，可按上述布局树和职责实现八个独立 Mods；无需复制安装器内部结构。但仍须保留快捷键冲突保护、明确安装和启用边界、准确的资源口径，以及第三方来源和许可告知。
 
@@ -117,11 +121,12 @@ herdr-app do layout.switch '{"name":"oh-my-herdr"}'
 - Mods 是可信代码，不是沙箱。本套件可执行 Git、打开本机应用、通过 VS Code 发起 SSH 连接、启动用户填写的程序。个人 shared state 明文保存，不适合放密钥。
 - `⌘W` 从关闭 tab 改为关闭当前 pane，会结束其中的终端；最后一个 pane 关闭时也关闭 tab。`⌘⇧W` 的原关闭 pane 绑定被移除。`⌘T` 与原生 `⌘⇧P` 保留。
 - `keybindings.json` 是安装器规则，不是可直接覆盖 Herdr 配置的 `keys.json`。已有同名绑定不能未经同意替换；安装器没有 force 选项。
-- 原生 helper 的构建产物不入 Git。干净检出必须先构建；找不到 helper 时应显示错误，不退回 `ps`、`top`、`lsof` 或 PowerShell 采样。
+- 原生 helper 的构建产物不入 Git。源码检出必须先显式构建；发布 ZIP 必须自带匹配架构的 helper，缺失或损坏时在写配置前失败，不现场编译，不退回 `ps`、`top`、`lsof` 或 PowerShell 采样。
 - 源码与应用 home 单向部署。不复制个人 `apps.json`、`hosts.json`、shared state、data、窗口信息或会话进仓库。
 - 适配器来源为内置 0.1.14 副本，目标运行版本为 Desktop 0.1.15。升级宿主时需核对当前类型与副本差异，不能把新 API 当成旧版本也支持。
 - commit 详情是 retained 子视图。不要在 deferred row renderer 注册事件，也不要跨元素描述复用外层 render 创建的元素对象。
 - Linux / Windows 资源采集尚未完成目标平台运行验收；Remote - SSH 尚未完成端到端验收。macOS 部分资源弹层物理输入、排序与滚动交互仍需验收，不能用 `herdr-app check` 代替。
+- 发布构建矩阵为 macOS arm64（`macos-15`）和 x64（`macos-15-intel`）。本机 arm64 验证不代表 Intel、未装 CLT 的干净 Mac 或浏览器下载后的 Gatekeeper 路径已验收。
 - 项目原创代码采用 Apache-2.0。第三方代码、图标与 native 依赖的许可例外见 [NOTICE](NOTICE)、[THIRD_PARTY.md](THIRD_PARTY.md) 及各 Mod 内的许可文件，分发时必须保留。VS Code、Finder、Zed、IntelliJ IDEA 使用中性图标，应用名称不代表厂商背书；不要重新打包未经核清分发权的本机应用图标。
 
 ## Done when

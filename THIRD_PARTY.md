@@ -1,6 +1,6 @@
 # Third-party provenance
 
-Evidence recorded 2026-11-11. Project-original code is Apache-2.0 ([LICENSE](LICENSE)); this is not a blanket license for third-party code, art or trademarks. [NOTICE](NOTICE) and the component texts below must accompany redistribution. No publication or installation is performed by this record.
+Evidence recorded 2026-11-12. Project-original code is Apache-2.0 ([LICENSE](LICENSE)); this is not a blanket license for third-party code, art or trademarks. [NOTICE](NOTICE) and the component texts below must accompany redistribution. No publication or daily-profile installation is performed by this record.
 
 ## Herdr Desktop builtin adaptations
 
@@ -46,6 +46,19 @@ Cursor and Sublime Text SVG path data is corroborated against Simple Icons revis
 - **Agent Launcher OMP artwork:** [fixed published-package/source provenance](mods/agent-launcher/icons/SOURCE.oh-my-pi.txt), including source revision `9058ab9d229663e229e2867824ba6df6f21e9e59`, and [original MIT copyright text](mods/agent-launcher/icons/LICENSE.oh-my-pi) are preserved.
 - **Resource Monitor artwork:** Lucide ISC and applicable Feather MIT notices remain in [LICENSE.lucide](mods/resource-monitor/LICENSE.lucide).
 - **Native helper:** project-original helper package declares Apache-2.0. [Dependency inventory and closure evidence](mods/resource-monitor/licenses/README.txt) and [complete cached per-version legal texts](mods/resource-monitor/licenses/CARGO-DEPENDENCIES.txt) cover all eight current runtime dependencies and conservatively retain cached build-dependency licenses, including BSD-3-Clause, ISC and Unicode-3.0 exceptions.
+
+## Private Node.js runtime in release ZIPs
+
+Suite 0.4.0 macOS ZIPs bundle only the matching official Node.js **26.13.1** executable at `runtime/node`, plus the **entire unmodified LICENSE from that same tarball** at `runtime/LICENSE`. This includes Node's own MIT text and its bundled dependency notices; the runtime is not covered solely by the suite's Apache-2.0 license or a shortened MIT summary. It remains in the extracted release directory, not installed into a global PATH or copied into the Herdr profile.
+
+Pinned official archives and SHA256 values (source: [official SHASUMS256.txt](https://nodejs.org/dist/v26.13.1/SHASUMS256.txt)):
+
+| Archive | SHA256 |
+| --- | --- |
+| [node-v26.13.1-darwin-arm64.tar.gz](https://nodejs.org/dist/v26.13.1/node-v26.13.1-darwin-arm64.tar.gz) | `aec2514ea1ceb2ba52455e9ec65986f6749a06dd759e5db2a72e6889668c9735` |
+| [node-v26.13.1-darwin-x64.tar.gz](https://nodejs.org/dist/v26.13.1/node-v26.13.1-darwin-x64.tar.gz) | `82bb96078a24ca50b9c9a38f2379e6be6d87171fcd400fc14c8934b3bce96e2f` |
+
+The packager verifies the pinned hash before extracting either executable or license. Node's official macOS minimum is 13.5. The suite ZIP is unsigned and not notarized; users may need to manually allow Node/helper in macOS Privacy & Security. No quarantine removal, Gatekeeper bypass, signing, or clean-download acceptance is claimed. A checksum distributed alongside a ZIP detects corruption but is not an independent authenticity signature. Local arm64 execution is not evidence of x64 execution.
 
 ## Evidence boundaries
 

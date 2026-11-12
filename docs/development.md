@@ -11,7 +11,7 @@
 | `mods/` | 八个可独立部署的 Mod；入口、图标及许可留在各自目录 |
 | `layouts/` | oh-my-herdr 布局及布局选择器 SVG |
 | `native/resource-sample/` | Rust 采集程序及依赖锁文件 |
-| `scripts/` | helper 构建与性能测量工具 |
+| `scripts/` | helper 构建、白名单 ZIP 打包、发布包预检及性能测量工具 |
 | `tests/` | Node 行为测试、安装器事务测试及真实 native helper 测试 |
 | `docs/design/` | 设计、协议和性能口径 |
 
@@ -31,7 +31,30 @@ node --test tests/*.test.mjs
 
 第二条命令应以零退出码结束且没有失败测试。`resource-native.test.mjs` 会执行刚构建的 helper，创建临时子进程与 IPv4/IPv6 回环监听，并在测试后清理；它不能由 JSON 解析测试替代。安装器测试使用临时源目录和应用 home，不部署到日常应用目录。
 
-第三条命令只打印 helper 构建、install 和 check 命令，不执行安装、切换布局或重启。它仍检查 Node.js、Cargo 和 `herdr-app` 是否在 PATH 中；dry-run 成功不等于实际部署或原生加载成功。
+第三条命令只读预检并打印 install/check 命令，不编译、安装、切换布局或重启。它要求已构建的 helper、可用的 Node 与 `herdr-app`，以及初始化过的目标 app home。dry-run 成功不等于实际部署或原生加载成功。
+
+## macOS 发布 ZIP
+
+套件版本由 `oh-my-herdr.json` 的 `version` 提供，目前为 0.4.0。helper 行为未改变，其 crate 版本仍为 0.1.0。在原生 arm64 或 x64 Mac 的源码根执行：
+
+```sh
+node scripts/package-release.mjs
+node --test tests/oh-my-herdr.test.mjs tests/open-with.test.mjs tests/local-icons.test.mjs tests/release-package.test.mjs
+```
+
+打包器显式构建当前架构 helper，从 Node 官方下载固定 26.13.1 tarball，核对代码中固定的 SHA256，然后只提取 `bin/node` 和完整 `LICENSE`。下载使用 macOS 自带 curl，可沿用构建环境的代理设置；只发生在发布端，不在用户安装时发生。包名为 `dist/oh-my-herdr-0.4.0-darwin-arm64.zip` 或 `dist/oh-my-herdr-0.4.0-darwin-x64.zip`，并生成 `dist/SHA256SUMS`。`dist/` 与私有临时打包目录被忽略，二进制不入源码 Git。
+
+已校验的 Node tarball 缓存在忽略目录 `.release-cache/`，后续构建仍逐次核对固定 SHA256；缓存不进入 ZIP。若缓存校验失败，删除报错的缓存文件后重新构建，不跳过校验。
+
+白名单只收录明确的安装器依赖、文档/许可、跟踪中的布局和八个 Mods 的代码、SVG、metadata 与许可，以及本次构建的 helper。不会复制 `.git`、tests、Rust target、个人 apps/hosts 配置、data、会话、shared/log/window 状态、生成声明或本机应用 PNG。`release.json` 是包内容校验清单，不是第二套安装归属记录；配置目录仍只用原来的 `.oh-my-herdr/installed.json`。同源 SHA256 不是独立签名。
+
+发布包测试从最终 ZIP 解压到包含空格和中文的目录，执行真实私有 Node 与安装器。测试将系统 Node、Cargo、下载工具和编译器替换为禁止调用的哨兵，Herdr CLI 使用边界替身；它验证损坏、架构、冲突、更新/卸载和配置恢复，不等于真实 Mod 加载或 Gatekeeper 验收。运行这些测试前必须先构建 ZIP，缺包时测试失败而不静默跳过。
+
+实际加载验证需另外使用 Herdr 初始化过的隔离 app home，设置同一个 `HERDR_APP_HOME`，从最终解压目录执行 `./install.sh`、`./install.sh --check`、`./install.sh --uninstall`。不得部署到日常 home、切换日常布局或重启当前服务。真实八 Mod 加载不需要改动 Mod UI，本次安装任务也不以此声称窗口交互已验收。
+
+GitHub Actions 的 `.github/workflows/release.yml` 在 `macos-15`（arm64）和 `macos-15-intel`（x64）分别构建并测试最终 ZIP，合并后重新生成两个 ZIP 的 `SHA256SUMS`。手动运行只生成 artifacts；`v<version>` tag 才创建 GitHub Release，并校验 tag 与套件版本一致。实现工作流不等于获准运行或发布它。没有签名、公证、DMG、自动更新服务或系统 PATH 安装。
+
+私有 Node 要求 macOS 13.5+。本机某一架构通过不代表另一架构通过；未安装 CLT 的干净 Mac、浏览器下载 quarantine 与手动安全许可流程须单独验收，不能用隔离 PATH 测试代替。
 
 ## 修改 Rust 采集程序
 

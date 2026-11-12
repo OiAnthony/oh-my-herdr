@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { dirname, isAbsolute, join, posix, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { cacheAppIcons } from "./scripts/cache-app-icons.mjs";
+import { validatePackage, validateNativeHelper } from "./scripts/validate-package.mjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const RECORD = ".oh-my-herdr/installed.json";
@@ -361,23 +362,25 @@ export async function uninstall(home, { beforeCommit } = {}) {
   return { home, files: Object.keys(record.files).length, warnings: keys.warnings };
 }
 
-async function validateDeployment(home, bundle) {
-  const record = await readRecord(home);
-  if (!record.bytes) throw new Error("Suite is not installed (missing ownership record)");
-  await preflight(home, record, bundle.files);
-  const keys = await planKeys(home, record.keybindings, bundle.keybindings);
-  const installed = new Map(record.keybindings.map(entry => [JSON.stringify([entry.section, entry.key]), entry.after]));
-  if (keys.operation || installed.size !== bundle.keybindings.length
-      || bundle.keybindings.some(rule => !installed.has(JSON.stringify([rule.section, rule.key]))
-        || installed.get(JSON.stringify([rule.section, rule.key])) !== rule.to)) {
-    throw new Error("Keybindings differ from suite; install the current suite first");
-  }
-  if (Object.keys(record.files).length !== bundle.files.size) throw new Error("Deployment contains obsolete ownership; install the current suite first");
-  for (const [path, file] of bundle.files) {
-    const bytes = await bytesAt(home, path);
-    if (!bytes || !bytes.equals(file.bytes) || record.files[path] !== file.sha256) throw new Error(`Deployment differs from suite: ${path}`);
-    if (file.mode && process.platform !== "win32" && ((await fs.stat(await safePath(home, path))).mode & 0o100) === 0) {
-      throw new Error(`Native helper is not executable: ${path}`);
+async function validateDeployment(home, bundle, beforeInstall = false) {
+  if (!beforeInstall) {
+    const record = await readRecord(home);
+    if (!record.bytes) throw new Error("Suite is not installed (missing ownership record)");
+    await preflight(home, record, bundle.files);
+    const keys = await planKeys(home, record.keybindings, bundle.keybindings);
+    const installed = new Map(record.keybindings.map(entry => [JSON.stringify([entry.section, entry.key]), entry.after]));
+    if (keys.operation || installed.size !== bundle.keybindings.length
+        || bundle.keybindings.some(rule => !installed.has(JSON.stringify([rule.section, rule.key]))
+          || installed.get(JSON.stringify([rule.section, rule.key])) !== rule.to)) {
+      throw new Error("Keybindings differ from suite; install the current suite first");
+    }
+    if (Object.keys(record.files).length !== bundle.files.size) throw new Error("Deployment contains obsolete ownership; install the current suite first");
+    for (const [path, file] of bundle.files) {
+      const bytes = await bytesAt(home, path);
+      if (!bytes || !bytes.equals(file.bytes) || record.files[path] !== file.sha256) throw new Error(`Deployment differs from suite: ${path}`);
+      if (file.mode && process.platform !== "win32" && ((await fs.stat(await safePath(home, path))).mode & 0o100) === 0) {
+        throw new Error(`Native helper is not executable: ${path}`);
+      }
     }
   }
   const builtinBytes = await bytesAt(home, "installed.json");
@@ -388,7 +391,7 @@ async function validateDeployment(home, bundle) {
   const modReference = async name => {
     if (typeof name !== "string" || !/^[a-zA-Z0-9_-]+$/.test(name)
         || (!bundle.mods.has(name) && !builtinFile(name, "main.js"))) throw new Error(`Unknown layout mod: ${name}`);
-    if (!await bytesAt(home, `mods/${name}/main.js`)) throw new Error(`Missing referenced mod: ${name}`);
+    if (!(beforeInstall && bundle.files.has(`mods/${name}/main.js`)) && !await bytesAt(home, `mods/${name}/main.js`)) throw new Error(`Missing referenced mod: ${name}`);
   };
   const resource = async path => {
     relativePath(path);
@@ -396,7 +399,7 @@ async function validateDeployment(home, bundle) {
       const parts = path.split("/");
       if (parts[0] !== "mods" || !builtinFile(parts[1], parts.slice(2).join("/"))) throw new Error(`Resource outside suite/builtins: ${path}`);
     }
-    if (!await bytesAt(home, path)) throw new Error(`Missing static resource: ${path}`);
+    if (!(beforeInstall && bundle.files.has(path)) && !await bytesAt(home, path)) throw new Error(`Missing static resource: ${path}`);
   };
   const visit = async value => {
     if (!value || typeof value !== "object") return;
@@ -408,10 +411,10 @@ async function validateDeployment(home, bundle) {
     }
   };
   for (const name of bundle.layouts) {
-    const layout = JSON.parse((await bytesAt(home, `layouts/${name}.json`)).toString());
+    const layout = JSON.parse((beforeInstall ? bundle.files.get(`layouts/${name}.json`).bytes : await bytesAt(home, `layouts/${name}.json`)).toString());
     if (layout.preview !== `layouts/${name}.svg`) throw new Error(`Invalid layout preview: ${name}`);
     await visit(layout);
-    const preview = await bytesAt(home, layout.preview);
+    const preview = beforeInstall ? bundle.files.get(layout.preview).bytes : await bytesAt(home, layout.preview);
     if (!/<svg(?:\s|>)/.test(preview.toString())) throw new Error(`Invalid SVG preview: ${name}`);
   }
   // Literal imports/resources and finite ternary asset templates only; this is not a JS parser.
@@ -424,7 +427,7 @@ async function validateDeployment(home, bundle) {
       for (const match of text.matchAll(imports)) {
         const target = posix.normalize(posix.join(posix.dirname(path), match[1]));
         if (!bundle.files.has(target)) throw new Error(`Missing or external relative import: ${path}: ${match[1]}`);
-        if (!await bytesAt(home, target)) throw new Error(`Missing relative import: ${target}`);
+        if (!beforeInstall && !await bytesAt(home, target)) throw new Error(`Missing relative import: ${target}`);
       }
     }
     for (const match of text.matchAll(/(["'])((?:mods|icons|backgrounds|layouts)\/[^"'\r\n]+)\1/g)) {
@@ -460,11 +463,28 @@ export async function check(home, { sourceRoot = ROOT, runCheck = promisify(exec
   return { home, mods: bundle.mods.size };
 }
 
+async function cliPreflight(command, home) {
+  await validatePackage(ROOT);
+  if (command === "uninstall") return;
+  await promisify(execFile)("herdr-app", ["--version"], { env: { ...process.env, HERDR_APP_HOME: home } });
+  if (!await bytesAt(home, "keys.json") || !await bytesAt(home, "installed.json")) {
+    throw new Error("Herdr app home is not initialized (missing keys.json or installed.json); start Herdr with this home once before installing");
+  }
+  const bundle = await loadBundle();
+  await validateNativeHelper(ROOT);
+  if (command === "install") await validateDeployment(home, bundle, true);
+}
+
 export async function main(argv = process.argv.slice(2)) {
+  if (argv[0] === "preflight" && [2, 3].includes(argv.length) && ["install", "check", "uninstall"].includes(argv[1])) {
+    await cliPreflight(argv[1], resolveHome(argv[2]));
+    return;
+  }
   const [command, argument, ...extra] = argv;
   if (!["install", "check", "uninstall"].includes(command) || extra.length || argument?.startsWith("-")) {
     throw new Error("Usage: node oh-my-herdr.mjs install|check|uninstall [app-home] (no force option)");
   }
+  await cliPreflight(command, resolveHome(argument));
   const result = await ({ install, check, uninstall })[command](resolveHome(argument), command === "install" ? { localIcons: true } : undefined);
   for (const warning of result.warnings ?? []) console.error(`Warning: ${warning}`);
   console.log(`${command}: ${result.home}; ${result.files ?? result.mods} ${command === "check" ? "mods checked" : "owned files"}. No layout was switched.`);

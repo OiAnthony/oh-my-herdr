@@ -4,17 +4,30 @@ Herdr Desktop 的 oh-my-herdr 工作区：左侧 Spaces 和 Agents，右上角�
 
 ![oh-my-herdr 布局](preview.png)
 
-支持 Herdr Desktop 0.1.15，不适用于 Herdr TUI。当前源码对应 0.3.0。
+支持 Herdr Desktop 0.1.15，不适用于 Herdr TUI。套件版本为 0.4.0。
 
 ## 安装
 
-需要 Herdr Desktop 0.1.15（至少启动过一次）、Node.js、Rust 工具链；macOS 还要 Xcode Command Line Tools。终端要能运行 `herdr-app`。
+需要 macOS 13.5 或更新版本，以及至少启动过一次的 Herdr Desktop 0.1.15。终端要能运行 `herdr-app`。普通 ZIP 安装不需要 Node.js、Rust、Cargo、Git 或 Xcode，不修改系统 PATH，不使用 sudo。
+
+在 [Releases](https://github.com/OiAnthony/oh-my-herdr/releases) 下载 0.4.0 的对应架构 ZIP 和 `SHA256SUMS`：Apple Silicon 选 `darwin-arm64`，Intel 选 `darwin-x64`。若该版本尚未发布，维护者需先按[开发指南](docs/development.md)构建；GitHub 自动生成的 Source code ZIP 不包含运行时或 helper，不能代替发布包。
+
+以下命令以 Apple Silicon、下载目录为 `~/Downloads` 为例；Intel 用户将文件名中的 `arm64` 换为 `x64`：
 
 ```sh
-git clone https://github.com/OiAnthony/oh-my-herdr.git && oh-my-herdr/install.sh
+cd ~/Downloads
+shasum -a 256 oh-my-herdr-0.4.0-darwin-arm64.zip
+# 将输出与 SHA256SUMS 中同名文件的 SHA256 比较，一致后再解压。
+unzip oh-my-herdr-0.4.0-darwin-arm64.zip
+cd oh-my-herdr-0.4.0-darwin-arm64
+./install.sh --switch
 ```
 
-脚本编译资源采集程序、安装布局和 8 个 Mods、合并快捷键，再运行 `herdr-app check`。成功时输出 `8 mods checked`。安装默认不切换布局，也不重启 Herdr；遇到文件或快捷键冲突会停止。先看要执行的命令可加 `--dry-run`。
+脚本使用包内 `runtime/node` 与预编译资源采集程序，安装布局和 8 个 Mods、合并快捷键，再运行 `herdr-app check`。成功时输出 `8 mods checked`，`--switch` 随后显式启用布局。不加 `--switch` 则不切换布局；所有模式都不重启 Herdr。`--dry-run` 只读预检并打印命令。包损坏、架构不符、Herdr 缺失或 home 未初始化时，写入配置前失败，不调用系统 Node、不下载依赖、不现场编译。
+
+ZIP 未签名、未公证。浏览器下载后，Node 或 helper 可能被 macOS Gatekeeper 拦截。确认下载来源和校验值后，按系统提示在「系统设置 → 隐私与安全性」中手动允许被阻止的程序，再重试；若系统仍不允许执行，停止安装。安装器不会删除 quarantine 或关闭 Gatekeeper，也不承诺没有安全提示。校验和用于发现损坏，不是独立签名。
+
+安装免工具链不代表运行功能免依赖：Git Graph 等 Git 功能仍需可用 Git；编辑器和 Agent 需自行安装。本套件不捆绑 Git，也不安装 Command Line Tools。
 
 Mods 是可信代码，安装前可以读源码。
 
@@ -27,7 +40,7 @@ herdr-app do layout.switch '{"name":"oh-my-herdr"}'
 安装时加 `--switch` 可以一步完成：
 
 ```sh
-oh-my-herdr/install.sh --switch
+./install.sh --switch
 ```
 
 `herdr-app check` 只验证部署和初始加载，布局与交互仍要在窗口里确认。
@@ -77,36 +90,53 @@ macOS 安装时会从本机已安装的 VS Code、Finder、Zed 和 IntelliJ IDEA
 
 ## 更新与卸载
 
-更新时进入项目目录重新运行：
+下载新版的对应架构 ZIP，核对新版 `SHA256SUMS` 后解压到新目录，再从新目录运行 `./install.sh`。例如重新安装 0.4.0（不切换布局）：
 
 ```sh
+cd ~/Downloads/oh-my-herdr-0.4.0-darwin-arm64
 ./install.sh
+./install.sh --check
 ```
+
+不需要系统 Node，不添加更新服务，也不从旧目录自动下载新版。保留解压目录，以便检查或卸载。
 
 布局原名 `Professional`，现统一为 `oh-my-herdr`。更新会移除归属记录中未修改的旧布局文件；未受管或已修改的同名文件不会被强制覆盖。若当前正在使用旧布局，先切到内置 `main`，更新后按上面的启用命令切到新布局。旧布局的尺寸、显隐等个人状态保留，不自动迁移到新名称。
 
-卸载前先切回内置布局：
+卸载前先切回内置布局；自定义 home 时，以下所有命令使用同一个 `HERDR_APP_HOME`：
 
 ```sh
 herdr-app do layout.switch '{"name":"main"}'
+cd ~/Downloads/oh-my-herdr-0.4.0-darwin-arm64
+./install.sh --uninstall
 ```
 
-再执行：
-
-```sh
-node oh-my-herdr.mjs uninstall
-```
+卸载同样使用私有 Node，恢复未修改的受管快捷键，保留个人配置与状态。即使 Herdr CLI 已移除，仍可卸载。若受管文件有本地修改，先按报错备份、处理冲突，不强制覆盖。
 
 不要通过删除 `mods/` 或 `data/` 目录卸载。
+
+## 从源码开发
+
+源码安装需要 Node.js、Rust/Cargo；macOS 编译需要 Xcode Command Line Tools。开发者显式构建后安装：
+
+```sh
+git clone https://github.com/OiAnthony/oh-my-herdr.git
+cd oh-my-herdr
+node scripts/build-resource-helper.mjs
+./install.sh
+```
+
+`install.sh` 不再自动编译。开发测试、双架构打包和隔离验证见[开发指南](docs/development.md)。
 
 ## 常见问题
 
 | 现象 | 处理 |
 | --- | --- |
 | `Missing keys.json` | 用目标应用目录启动一次 Herdr，确认 `HERDR_APP_HOME` 一致 |
-| `Missing native resource helper` | 运行 `node scripts/build-resource-helper.mjs`，再重新安装 |
+| helper、私有 Node 缺失或校验不符 | 发布包重新下载并解压；不要补装系统 Node 或 Cargo。源码开发者按开发指南显式构建 helper |
 | 检查通过但界面没变化 | 手动切到 oh-my-herdr；安装器不会自动启用布局 |
 | 快捷键或文件冲突 | 按报错检查 `keys.json` 或受管文件；安装器不提供强制覆盖 |
+| macOS 阻止执行 Node 或 helper | 核对来源和 SHA256，按系统「隐私与安全性」提示手动允许；不要关闭安全机制 |
+| 架构不匹配 | Apple Silicon 使用 arm64 ZIP，Intel 使用 x64 ZIP |
 
 更多资料：
 

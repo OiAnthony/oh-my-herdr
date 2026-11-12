@@ -25,6 +25,9 @@ Other separately licensed components retain their own terms:
 - Native helper dependencies: exact per-package licenses, copyright notices
   and registry checksums in mods/resource-monitor/licenses/CARGO-DEPENDENCIES.txt;
   coverage and exclusions in mods/resource-monitor/licenses/README.txt.
+- macOS release ZIPs only: official Node.js 26.13.1 private runtime;
+  runtime/LICENSE preserves the complete official tarball license, including
+  bundled dependency notices. See THIRD_PARTY.md for pinned archive hashes.
 
 Application names and trademarks identify supported launch destinations or
 upstream origins. No endorsement or affiliation is implied, and no trademark

@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-12
+
+- 新增 macOS arm64/x64 白名单 ZIP 打包与双原生架构 GitHub Actions，包含预编译资源 helper、官方固定 Node.js 26.13.1、完整 Node/依赖许可及最终 SHA256SUMS；不提交二进制，不使用 DMG、签名、公证或自动更新服务。
+- `install.sh` 不再调用 Cargo。发布包仅使用私有 `runtime/node`，损坏时明确失败，不回退到全局 Node、不下载依赖或现场编译；源码开发者先显式运行 helper 构建脚本。安装前校验架构、包内容、可执行 helper、Herdr 与初始化 home，复用原有归属、事务、快捷键恢复和冲突保护。
+- 新增 `--check` 与 `--uninstall` 私有运行时入口；更新为下载新版 ZIP 后重新安装。默认不切换布局、不重启，只有 `--switch` 显式启用。文档说明 macOS 13.5 下限、未签名安全提示及 Git/编辑器/Agent 的独立运行依赖。
+- macOS arm64 实际构建最终 ZIP；87 项既有安装器/Open With/图标测试与 17 项最终包消费边界测试通过。解压到含空格和中文的路径，使用真实私有 Node 26.13.1、真实 Herdr Desktop 0.1.15 和隔离 PATH/home 完成 install、八 Mod check 与 uninstall，恢复原快捷键并保留个人状态；系统 Node、Cargo、下载和编译工具哨兵未被调用。ZIP 共 140 个文件，完整 Node LICENSE 与固定 SHA tarball 中的原文逐字节一致，未包含个人或生成状态。
+- 本次未提交、推送、发布、触发远端工作流、安装到日常 profile、切换日常布局或重启服务。x64 运行、macOS 13.5 实机、未装 CLT 的干净 Mac、浏览器下载后的 Gatekeeper/手动安全许可流程及真实窗口交互均未验收；工作流 YAML 解析通过不代表双架构远端运行通过。
 
 - Open With 默认列表将 Finder 移到首位，其余应用相对顺序不变；保留已保存的默认应用，自定义应用列表仍遵循个人配置。远程及非 macOS 的 VS Code 回退按应用 ID 查找，不再依赖列表首项。
 - 18 项相关测试和八个 Mod 加载检查通过，已安装到当前 Herdr。真实窗口截图确认 Finder 位于首行、六项图标正常，VS Code 仍为已保存的默认项；未切换布局或重启。
