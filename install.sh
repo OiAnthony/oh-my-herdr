@@ -11,11 +11,11 @@ usage() {
   cat <<'EOF'
 Usage: install.sh [options] [app-home]
 
-Build the native resource helper, install the Professional layout and eight Mods,
+Build the native resource helper, install the oh-my-herdr layout and eight Mods,
 then run herdr-app check.
 
 Options:
-  --switch     Switch the running Herdr Desktop to Professional after check
+  --switch     Switch the running Herdr Desktop to oh-my-herdr after check
   --dry-run    Print commands without running them
   -h, --help   Show this help
 
@@ -82,15 +82,15 @@ run node "$root/oh-my-herdr.mjs" "${check_args[@]}"
 
 if [ "$switch_layout" -eq 1 ]; then
   if [ "$dry_run" -eq 1 ]; then
-    printf "+ herdr-app \"do\" layout.switch '{\"name\":\"Professional\"}'\n"
+    printf "+ herdr-app \"do\" layout.switch '{\"name\":\"oh-my-herdr\"}'\n"
   else
-    herdr-app "do" layout.switch '{"name":"Professional"}'
+    herdr-app "do" layout.switch '{"name":"oh-my-herdr"}'
   fi
 elif [ "$dry_run" -eq 0 ]; then
   echo "Installed. Enable it with:"
   if [ "$have_app_home" -eq 1 ]; then
-    printf "  HERDR_APP_HOME=%q herdr-app \"do\" layout.switch '{\"name\":\"Professional\"}'\n" "$app_home"
+    printf "  HERDR_APP_HOME=%q herdr-app \"do\" layout.switch '{\"name\":\"oh-my-herdr\"}'\n" "$app_home"
   else
-    printf "  herdr-app \"do\" layout.switch '{\"name\":\"Professional\"}'\n"
+    printf "  herdr-app \"do\" layout.switch '{\"name\":\"oh-my-herdr\"}'\n"
   fi
 fi

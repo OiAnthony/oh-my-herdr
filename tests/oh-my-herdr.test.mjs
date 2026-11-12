@@ -13,7 +13,7 @@ const keybindings = [
   { section: "global", key: "cmd-shift-w", from: "pane.close", to: null },
 ];
 const defaultKeys = { global: { "cmd-w": "tab.close", "cmd-shift-w": "pane.close", "cmd-t": "tab.new" },
-  terminal: { "cmd-c": "terminal.copy" }, "layout:Professional": { "cmd-shift-g cmd-shift-g": "layout.toggle:graph-panel" } };
+  terminal: { "cmd-c": "terminal.copy" }, "layout:oh-my-herdr": { "cmd-shift-g cmd-shift-g": "layout.toggle:graph-panel" } };
 async function put(root, path, text) {
   await fs.mkdir(dirname(join(root, path)), { recursive: true });
   await fs.writeFile(join(root, path), text);
@@ -26,15 +26,15 @@ async function fixture(t) {
   await fs.mkdir(home);
   const manifest = { name: "oh-my-herdr", version: "0.3.0", herdrVersion: "0.1.15",
     mods: names.map(name => ({ name, source: `mods/${name}` })),
-    layouts: [{ name: "Professional", source: "layouts/Professional.json", preview: "layouts/Professional.svg" }] };
+    layouts: [{ name: "oh-my-herdr", source: "layouts/oh-my-herdr.json", preview: "layouts/oh-my-herdr.svg" }] };
   await put(sourceRoot, "oh-my-herdr.json", JSON.stringify(manifest));
   await put(sourceRoot, "keybindings.json", JSON.stringify(keybindings));
   await put(home, "keys.json", JSON.stringify(defaultKeys));
   for (const name of names) await put(sourceRoot, `mods/${name}/main.js`, `export default ${JSON.stringify(name)};\n`);
   await put(sourceRoot, "mods/open-with/icons/application.svg", "<svg></svg>");
   await put(sourceRoot, "mods/open-with/main.js", 'const icon = "mods/open-with/icons/application.svg";\n');
-  await put(sourceRoot, "layouts/Professional.json", JSON.stringify({ type: "block", preview: "layouts/Professional.svg", content: { mod: "open-with" } }));
-  await put(sourceRoot, "layouts/Professional.svg", "<svg></svg>");
+  await put(sourceRoot, "layouts/oh-my-herdr.json", JSON.stringify({ type: "block", preview: "layouts/oh-my-herdr.svg", content: { mod: "open-with" } }));
+  await put(sourceRoot, "layouts/oh-my-herdr.svg", "<svg></svg>");
   return { root, sourceRoot, home, options: { sourceRoot } };
 }
 async function snapshot(root) {
@@ -93,7 +93,7 @@ test("first deploy excludes generated/private files and preserves every unowned 
     await put(sourceRoot, `mods/open-with/${name}`, "must not deploy");
     await put(home, `mods/open-with/${name}`, "personal");
   }
-  const personal = ["settings.json", "shared.json", "installed.json", "layouts/.state/Professional.json", "mods/open-with/icons/custom.svg", "mods/unrelated/main.js"];
+  const personal = ["settings.json", "shared.json", "installed.json", "layouts/.state/oh-my-herdr.json", "mods/open-with/icons/custom.svg", "mods/unrelated/main.js"];
   for (const path of personal) await put(home, path, "personal");
   await install(home, options);
   for (const path of personal) assert.equal(await fs.readFile(join(home, path), "utf8"), "personal");
@@ -134,9 +134,54 @@ test("updates unchanged ownership and removes only obsolete owned files", async 
   assert.equal(await fs.readFile(join(home, "mods/open-with/icons/personal.svg"), "utf8"), "custom icon");
 });
 
+for (const outcome of ["update", "edited", "rollback"]) {
+  test(`Professional layout retirement: ${outcome}`, async t => {
+    const { sourceRoot, home, options } = await fixture(t);
+    await put(sourceRoot, "keybindings.json", await fs.readFile(new URL("../keybindings.json", import.meta.url)));
+    const files = {};
+    for (const [path, bytes] of Object.entries({
+      "layouts/Professional.json": '{"preview":"layouts/Professional.svg","type":"row","children":[]}',
+      "layouts/Professional.svg": "<svg></svg>",
+    })) {
+      await put(home, path, bytes);
+      files[path] = createHash("sha256").update(bytes).digest("hex");
+    }
+    await put(home, recordPath, JSON.stringify({ name: "oh-my-herdr", schemaVersion: 2, version: "0.3.0", files,
+      keybindings: [{ section: "layout:Professional", key: "cmd-shift-g cmd-shift-g", before: "layout.toggle:graph-panel", after: null }] }));
+    await put(home, "keys.json", JSON.stringify({ ...defaultKeys, "layout:Professional": {} }));
+    const state = '{"sidebar":{"size":{"px":320}}}';
+    await put(home, "layouts/.state/Professional.json", state);
+    if (outcome === "edited") await put(home, "layouts/Professional.json", "personal edits");
+    const before = await snapshot(home);
+    if (outcome === "edited") {
+      await assert.rejects(install(home, options), /Owned file edited or deleted/);
+      assert.deepEqual(await snapshot(home), before);
+    } else if (outcome === "rollback") {
+      await assert.rejects(install(home, { ...options, beforeCommit: ({ path }) => {
+        if (path === recordPath) throw new Error("layout migration failure");
+      } }), /layout migration failure/);
+      assert.deepEqual(await snapshot(home), before);
+    } else {
+      await install(home, options);
+      await missing(join(home, "layouts/Professional.json"));
+      await missing(join(home, "layouts/Professional.svg"));
+      const layout = JSON.parse(await fs.readFile(join(home, "layouts/oh-my-herdr.json")));
+      assert.equal(layout.preview, "layouts/oh-my-herdr.svg");
+      assert.equal(await fs.readFile(join(home, "layouts/.state/Professional.json"), "utf8"), state);
+      const keys = JSON.parse(await fs.readFile(join(home, "keys.json")));
+      assert.equal(keys["layout:Professional"]["cmd-shift-g cmd-shift-g"], "layout.toggle:graph-panel");
+      assert.equal(Object.hasOwn(keys["layout:oh-my-herdr"], "cmd-shift-g cmd-shift-g"), false);
+      await uninstall(home);
+      await missing(join(home, "layouts/oh-my-herdr.json"));
+      await missing(join(home, "layouts/oh-my-herdr.svg"));
+      assert.equal(await fs.readFile(join(home, "layouts/.state/Professional.json"), "utf8"), state);
+    }
+  });
+}
+
 test("all conflicts are preflighted before any destination mutation", async t => {
   const { home, options } = await fixture(t);
-  await put(home, "layouts/Professional.svg", "late conflict");
+  await put(home, "layouts/oh-my-herdr.svg", "late conflict");
   const before = await snapshot(home);
   await assert.rejects(install(home, options), /Unowned file conflict/);
   assert.deepEqual(await snapshot(home), before);
@@ -162,7 +207,7 @@ for (const operation of ["edited", "deleted"]) {
 test("uninstall removes only unchanged owned files and its record", async t => {
   const { home, options } = await fixture(t);
   await install(home, options);
-  const personal = ["mods/open-with/apps.json", "mods/open-with/hosts.json", "mods/open-with/icons/custom.svg", "mods/open-with/gpui-kit.d.ts", "mods/open-with/.error", "shared.json", "installed.json", "layouts/.state/Professional.json"];
+  const personal = ["mods/open-with/apps.json", "mods/open-with/hosts.json", "mods/open-with/icons/custom.svg", "mods/open-with/gpui-kit.d.ts", "mods/open-with/.error", "shared.json", "installed.json", "layouts/.state/oh-my-herdr.json"];
   for (const path of personal) await put(home, path, "keep");
   await uninstall(home);
   for (const path of personal) assert.equal(await fs.readFile(join(home, path), "utf8"), "keep");
@@ -261,7 +306,7 @@ test("check reports every failing mod instead of stopping after the first", asyn
 test("check permits installed builtin references but rejects missing resources and unknown mods", async t => {
   const { sourceRoot, home, options } = await fixture(t);
   await put(sourceRoot, "mods/open-with/main.js", 'const icon = "mods/pane/close.svg";');
-  await put(sourceRoot, "layouts/Professional.json", JSON.stringify({ preview: "layouts/Professional.svg", content: { mod: "pane" } }));
+  await put(sourceRoot, "layouts/oh-my-herdr.json", JSON.stringify({ preview: "layouts/oh-my-herdr.svg", content: { mod: "pane" } }));
   await put(home, "installed.json", JSON.stringify({ pane: { "main.js": "builtin", "close.svg": "builtin" } }));
   await put(home, "mods/pane/main.js", "builtin");
   await put(home, "mods/pane/close.svg", "<svg></svg>");
@@ -295,7 +340,7 @@ test("check validates literal relative imports and finite template asset choices
 
 test("check refuses a layout preview that does not match its suite destination", async t => {
   const { sourceRoot, home, options } = await fixture(t);
-  await put(sourceRoot, "layouts/Professional.json", JSON.stringify({ preview: "layouts/Other.svg", content: { mod: "open-with" } }));
+  await put(sourceRoot, "layouts/oh-my-herdr.json", JSON.stringify({ preview: "layouts/Other.svg", content: { mod: "open-with" } }));
   await install(home, options);
   await assert.rejects(check(home, { ...options, runCheck: async () => ({}) }), /Invalid layout preview/);
 });
@@ -482,7 +527,7 @@ test("shipped Changes commands replace native Graph sequences and restore them o
   const keys = JSON.parse(await fs.readFile(join(home, "keys.json")));
   assert.equal(keys.global["cmd-shift-g"], "tabs-professional.toggle-changes");
   assert.equal(keys["mod:professional-panels"]["cmd-shift-g"], "tabs-professional.toggle-changes");
-  for (const section of ["layout:Professional", "mod:professional-panels"]) {
+  for (const section of ["layout:oh-my-herdr", "mod:professional-panels"]) {
     assert.equal(Object.hasOwn(keys[section], "cmd-shift-g cmd-shift-g"), false);
   }
   await check(home, { ...options, runCheck: async () => ({}) });

@@ -120,9 +120,9 @@
   ],
   "layouts": [
     {
-      "name": "Professional",
-      "source": "layouts/Professional.json",
-      "preview": "layouts/Professional.svg"
+      "name": "oh-my-herdr",
+      "source": "layouts/oh-my-herdr.json",
+      "preview": "layouts/oh-my-herdr.svg"
     }
   ],
   "provenance": {

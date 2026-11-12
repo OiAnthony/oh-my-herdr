@@ -5,7 +5,7 @@
   { "section": "global", "key": "cmd-shift-a", "from": null, "to": "tabs-professional.launch-default" },
   { "section": "global", "key": "cmd-shift-e", "from": null, "to": "tabs-professional.focus-files" },
   { "section": "global", "key": "cmd-shift-g", "from": "tabs-professional.focus-changes", "to": "tabs-professional.toggle-changes" },
-  { "section": "layout:Professional", "key": "cmd-shift-g cmd-shift-g", "from": "layout.toggle:graph-panel", "to": null },
+  { "section": "layout:oh-my-herdr", "key": "cmd-shift-g cmd-shift-g", "from": "layout.toggle:graph-panel", "to": null },
   { "section": "mod:professional-panels", "key": "cmd-shift-e", "from": null, "to": "tabs-professional.toggle-files" },
   { "section": "mod:professional-panels", "key": "cmd-shift-g", "from": null, "to": "tabs-professional.toggle-changes" },
   { "section": "mod:professional-panels", "key": "cmd-shift-g cmd-shift-g", "from": null, "to": null }

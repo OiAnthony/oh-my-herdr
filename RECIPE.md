@@ -1,8 +1,8 @@
 # oh-my-herdr
 
-Professional 是 Herdr Desktop 的完整工作区布局：左侧管理 Spaces 和 Agents，右上角启动 Agent 或用编辑器打开仓库，底部查看 Git 历史及受管终端的 CPU、内存。八个独立 Mods 由布局组合，不替换 Herdr 本体。目标版本为 Herdr Desktop 0.1.15，快捷键按 macOS 编写。
+oh-my-herdr 是 Herdr Desktop 的完整工作区布局：左侧管理 Spaces 和 Agents，右上角启动 Agent 或用编辑器打开仓库，底部查看 Git 历史及受管终端的 CPU、内存。八个独立 Mods 由布局组合，不替换 Herdr 本体。目标版本为 Herdr Desktop 0.1.15，快捷键按 macOS 编写。
 
-![oh-my-herdr Professional](preview.png)
+![oh-my-herdr 布局](preview.png)
 
 ## What you see
 
@@ -67,7 +67,7 @@ Tree 默认显示监听端口，没有 Ports 开关。Tree 与 Ports 页每 5 �
 
 ## Built from
 
-仓库根就是一个 Gallery layout 包：`layouts/Professional.json`、`layouts/Professional.svg`、`mods/`、本 recipe 和 `preview.png`。SVG 是 Herdr 布局选择器资源，PNG 是 Gallery 的真实界面截图，两者用途不同。
+仓库根就是一个 Gallery layout 包：`layouts/oh-my-herdr.json`、`layouts/oh-my-herdr.svg`、`mods/`、本 recipe 和 `preview.png`。SVG 是 Herdr 布局选择器资源，PNG 是 Gallery 的真实界面截图，两者用途不同。
 
 | Mod | 布局角色与职责 |
 | --- | --- |
@@ -105,7 +105,7 @@ node scripts/build-resource-helper.mjs && node oh-my-herdr.mjs install && node o
 确认安装检查通过，并且用户同意改变当前窗口布局后，执行：
 
 ```sh
-herdr-app do layout.switch '{"name":"Professional"}'
+herdr-app do layout.switch '{"name":"oh-my-herdr"}'
 ```
 
 安装器也负责后续更新和卸载。卸载前切回内置布局并关闭套件窗格；之后运行 `node oh-my-herdr.mjs uninstall`。它恢复未修改的受管快捷键，保留个人配置和状态。完整操作见 [README](README.md)。
@@ -127,7 +127,7 @@ herdr-app do layout.switch '{"name":"Professional"}'
 ## Done when
 
 - 在初始化过的隔离 app home 和独立 Core 会话中，从干净源码构建 helper，实际完成 install、check、uninstall；八个 Mod 初始加载成功。卸载恢复快捷键，个人配置保留。
-- 原生窗口显示 Professional 的左栏、标签栏、两个启动入口和状态栏；Files / Changes 在右侧，Graph 在底部，可同时显示，无加载错误。
+- 原生窗口显示 oh-my-herdr 的左栏、标签栏、两个启动入口和状态栏；Files / Changes 在右侧，Graph 在底部，可同时显示，无加载错误。
 - Agent 行点击只启动一次，星标和保存命令不启动；主按钮与 `⌘⇧A` 各只创建一个 tab，切换机器后默认项隔离，失效目标明确报错。
 - Open With 的设置默认项不打开程序；启动使用正确仓库与机器，不把远程目录交给本机普通应用。失败有明确提示。
 - Graph 能展开、收起和切换 commit；单击文件复用预览，双击固定，固定项不被替换；切换子仓库不改变终端 cwd 或 Changes 目标。

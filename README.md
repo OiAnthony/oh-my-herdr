@@ -1,8 +1,8 @@
 # oh-my-herdr
 
-Herdr Desktop 的 Professional 工作区：左侧 Spaces 和 Agents，右上角启动 Agent 或打开仓库，右侧 Files/Changes，底部 Git Graph、CPU 和内存。
+Herdr Desktop 的 oh-my-herdr 工作区：左侧 Spaces 和 Agents，右上角启动 Agent 或打开仓库，右侧 Files/Changes，底部 Git Graph、CPU 和内存。
 
-![Professional 布局](preview.png)
+![oh-my-herdr 布局](preview.png)
 
 支持 Herdr Desktop 0.1.15，不适用于 Herdr TUI。当前源码对应 0.3.0。
 
@@ -21,7 +21,7 @@ Mods 是可信代码，安装前可以读源码。
 ## 启用
 
 ```sh
-herdr-app do layout.switch '{"name":"Professional"}'
+herdr-app do layout.switch '{"name":"oh-my-herdr"}'
 ```
 
 安装时加 `--switch` 可以一步完成：
@@ -81,6 +81,8 @@ Open With 的应用列表写在 `mods/open-with/apps.json`，每项需要 `id`�
 ./install.sh
 ```
 
+布局原名 `Professional`，现统一为 `oh-my-herdr`。更新会移除归属记录中未修改的旧布局文件；未受管或已修改的同名文件不会被强制覆盖。若当前正在使用旧布局，先切到内置 `main`，更新后按上面的启用命令切到新布局。旧布局的尺寸、显隐等个人状态保留，不自动迁移到新名称。
+
 卸载前先切回内置布局：
 
 ```sh
@@ -101,7 +103,7 @@ node oh-my-herdr.mjs uninstall
 | --- | --- |
 | `Missing keys.json` | 用目标应用目录启动一次 Herdr，确认 `HERDR_APP_HOME` 一致 |
 | `Missing native resource helper` | 运行 `node scripts/build-resource-helper.mjs`，再重新安装 |
-| 检查通过但界面没变化 | 手动切到 Professional；安装器不会自动启用布局 |
+| 检查通过但界面没变化 | 手动切到 oh-my-herdr；安装器不会自动启用布局 |
 | 快捷键或文件冲突 | 按报错检查 `keys.json` 或受管文件；安装器不提供强制覆盖 |
 
 更多资料：

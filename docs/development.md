@@ -9,7 +9,7 @@
 | 路径 | 职责 |
 | --- | --- |
 | `mods/` | 八个可独立部署的 Mod；入口、图标及许可留在各自目录 |
-| `layouts/` | Professional 布局及布局选择器 SVG |
+| `layouts/` | oh-my-herdr 布局及布局选择器 SVG |
 | `native/resource-sample/` | Rust 采集程序及依赖锁文件 |
 | `scripts/` | helper 构建与性能测量工具 |
 | `tests/` | Node 行为测试、安装器事务测试及真实 native helper 测试 |

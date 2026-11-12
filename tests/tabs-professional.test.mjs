@@ -9,7 +9,7 @@ const source = readFileSync(new URL("../mods/tabs-professional/main.js", import.
 function fixture() {
   const panel = { id: "panel", hidden: true }, body = { id: "panel-body", active: "files" };
   const graph = { id: "graph-panel", hidden: true };
-  const host = { now: 0, calls: [], timers: [], target: { space: "s1", tab: "t1", pane: "p1" }, layout: "Professional" };
+  const host = { now: 0, calls: [], timers: [], target: { space: "s1", tab: "t1", pane: "p1" }, layout: "oh-my-herdr" };
   let receive;
   const cx = {
     spawn(fn) { fn(cx); },

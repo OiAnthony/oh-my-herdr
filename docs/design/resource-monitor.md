@@ -4,7 +4,7 @@
 
 ## 功能与边界
 
-Professional footer 最右侧显示 Herdr 受管 CPU 和内存，不随弹层作用域变化。点击打开同一 View 的 Task Manager。使用原生 Popover、RadioGroup、Tab、虚拟列表与主题色，宽度上限 416 px，高度上限 640 px。标题下方左侧为 Tree、Processes、Ports 页签，右侧为统一控制三个页签的 `Herdr / System` 选择器，同行使用 space-between 布局。每次打开返回 Herdr Tree，清空过滤并定位、展开当前 pane；打开期间切换页签保留范围。切换范围保留关键词与排序，重置滚动位置。Tree 始终显示已采集的监听行，不提供 Ports 开关。
+oh-my-herdr footer 最右侧显示 Herdr 受管 CPU 和内存，不随弹层作用域变化。点击打开同一 View 的 Task Manager。使用原生 Popover、RadioGroup、Tab、虚拟列表与主题色，宽度上限 416 px，高度上限 640 px。标题下方左侧为 Tree、Processes、Ports 页签，右侧为统一控制三个页签的 `Herdr / System` 选择器，同行使用 space-between 布局。每次打开返回 Herdr Tree，清空过滤并定位、展开当前 pane；打开期间切换页签保留范围。切换范围保留关键词与排序，重置滚动位置。Tree 始终显示已采集的监听行，不提供 Ports 开关。
 
 三个页签均无固定搜索框。直接键入字符进入搜索，空格分隔关键词，忽略大小写且全部命中；支持跨字段匹配。Tree 和 Processes 可匹配名称、机器、PID/PPID、显示格式的 CPU 和内存，Tree 还支持所属路径与监听字段。Backspace 删除字符，第一次 Esc 清空搜索，第二次 Esc 关闭弹层；Esc 使用局部 action 绑定，优先于 Popover 的默认关闭处理。方向键和 Enter 保留导航及展开操作，空格仅用于分词。切换页签清空搜索。
 
@@ -31,7 +31,7 @@ footer 数值最多三位数字，小数点、`%` 与单位不计入。CPU 低�
 ## 采集结构
 
 ```text
-Professional layout
+oh-my-herdr layout
   ├─ professional-status：机器、分支、agents、Git Graph
   ├─ professional-status hint：命令面板提示
   └─ resource-monitor View：最右侧 footer + Popover + 单一定时器

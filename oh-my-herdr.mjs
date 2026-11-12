@@ -12,7 +12,8 @@ const RECORD = ".oh-my-herdr/installed.json";
 const MODS = new Set(["open-with", "professional-status", "git-graph", "tabs-professional", "agent-launcher", "agents-professional", "professional-panels", "resource-monitor"]);
 // Historical ownership is accepted only to remove retired components during updates.
 const OWNED_MODS = new Set([...MODS, "git-graph-main", "open-vscode"]);
-const LAYOUTS = new Set(["Professional"]);
+const LAYOUTS = new Set(["oh-my-herdr"]);
+const OWNED_LAYOUTS = new Set([...LAYOUTS, "Professional"]);
 const digest = bytes => createHash("sha256").update(bytes).digest("hex");
 const excluded = name => name.startsWith(".") || /\.(?:d\.ts|error)$/.test(name)
   || ["jsconfig.json", "apps.json", "hosts.json"].includes(name);
@@ -29,12 +30,12 @@ function relativePath(path) {
   return path;
 }
 
-function ownedPath(path, mods = MODS) {
+function ownedPath(path, mods = MODS, layouts = LAYOUTS) {
   relativePath(path);
   const parts = path.split("/");
   if (parts[0] === "mods" && mods.has(parts[1]) && parts.length >= 3 && !parts.slice(2).some(excluded)) return;
   if (parts.length === 2 && parts[0] === "layouts"
-      && [...LAYOUTS].some(name => parts[1] === `${name}.json` || parts[1] === `${name}.svg`)) return;
+      && [...layouts].some(name => parts[1] === `${name}.json` || parts[1] === `${name}.svg`)) return;
   throw new Error(`Ownership outside suite boundaries: ${path}`);
 }
 
@@ -203,7 +204,7 @@ async function readRecord(home) {
       || !record.files || typeof record.files !== "object" || Array.isArray(record.files)) throw new Error("Invalid ownership record");
   const keybindings = record.schemaVersion === 2 ? bindingList(record.keybindings, ["before", "after"]) : [];
   for (const [path, hash] of Object.entries(record.files)) {
-    ownedPath(path, OWNED_MODS);
+    ownedPath(path, OWNED_MODS, OWNED_LAYOUTS);
     if (typeof hash !== "string" || !/^[a-f0-9]{64}$/.test(hash)) throw new Error(`Invalid ownership hash: ${path}`);
   }
   return { bytes, files: record.files, keybindings };
