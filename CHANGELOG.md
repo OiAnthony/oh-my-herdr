@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- 收紧 Task Manager footer：按钮从 176 px 缩至 148 px，CPU／内存数值槽分别缩至 40／48 px，改为左对齐并紧贴图标；保留三位数字格式、等宽字体、稳定槽位和 CPU 配色。
+- Task Manager 摘要改为全宽左右布局：CPU、Memory 在左侧分两行显示，Tree 内存趋势图自适应填满右侧剩余宽度；内存指标保留在 tooltip。21 项视图回归与 Desktop 0.1.15 Mod 加载检查通过，隔离原生窗口用固定样本检查了 416／304 px 面板及 footer 的低负载、缩写边界和未知值。未部署到日常应用，未验证物理输入或真实采集链路。
+- Task Manager 打开时自动返回 Herdr Tree，清空过滤并居中定位、展开当前 pane；定位按钮同时展开目标与祖先。页签与 scope 选择器改为同排左右分布，移除 Footprint 下方常驻说明，机器、采样和覆盖状态保留在摘要 tooltip。
+- 21 项视图测试及 Herdr Desktop 0.1.15 Mod 加载检查通过；隔离原生窗口使用固定样本确认同排布局、精简摘要和默认展开，并通过辅助功能点击收起全部及定位按钮验证展开行为。未部署到日常应用，未验证真实采集全链路。
+- Resource Manager 更名为 Task Manager，更新标题、辅助功能名称及键盘上下文；Professional 将资源 footer 移到状态栏最右侧，命令面板提示保留在其左侧。
+- 新增数值稳定排版规范：footer、面板摘要及 CPU／Memory 表格列使用固定宽度槽、等宽字体和右对齐，位数、未知值与内存单位变化不推动相邻元素。footer 资源槽调整为 188 px，配色规则不变。
+- Tree 默认采集、显示和搜索监听端口，移除 Ports 开关及其状态；沿用 5 秒扫描间隔和当前作用域，切到 Processes 或关闭面板停止扫描。
+- Task Manager footer 数值限制为最多三位数字，不计小数点、百分号与单位；内存按数值调整小数位并在需要时升单位，CPU 超过三位用 `k%` 等十进制缩写。仅压缩 footer，tooltip 与面板保留明细，颜色仍按原始 CPU 占用计算。
+- macOS arm64 的 56 项相关 Node 测试及 Herdr Desktop 0.1.15 Mod 初始加载检查通过。隔离原生窗口使用固定样本检查了最右侧 footer、Tree 默认监听行、Processes、未知值与 640 × 480 窄窗口；数值变化前后分隔符及内存图标区域像素一致。固定样本渲染不视为真实鼠标／键盘交互或完整采集链路验收；未部署到日常应用。
 - 修复 Resource Manager 的 Scope 选项文字偏上：为原生 Radio 显式设置 flex 和双轴居中，保持 24 px 高度及现有交互；隔离原生窗口截图确认 Herdr、System 文字垂直居中。
 - Resource Manager 新增 `Herdr / System` 作用域选择器，统一控制 Tree、Processes 和 Ports。每次打开默认 Herdr，切换范围保留关键词与排序，搜索不再隐式扩大范围；定位 pane 返回 Herdr Tree。System 增加全机 CPU／内存及 OS 进程树，未知指标不补零，进程自身指标与机器去重合计分开。footer 始终显示受管资源；关闭弹层停止全机采集，范围切换隔离 CPU 基线、监听缓存、趋势及迟到结果。原生 CLI 改为 `--scope=herdr|system [--ports]`，移除旧 `--all-ports`，helper 与 Mod 需配套部署。
 - 作用域功能在 macOS arm64 验证了 58 项相关 Node 测试、2 项 Rust 测试、Linux／Windows 交叉编译，以及 Herdr Desktop 0.1.15 初始加载和隔离窗口的真实全机 Tree 渲染。辅助功能读取被系统拒绝，未宣称物理鼠标／键盘切换验收。全机 helper 在约 939 个进程、1 Hz、每 5 秒扫描端口的 10 秒短测中占 1.55% 单核、峰值 RSS 3.98 MiB，超过既有 1% CPU 上限；完整应用性能尚未验收。本次未部署到日常应用、切换日常布局或重启现有服务。

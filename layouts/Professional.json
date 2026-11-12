@@ -203,16 +203,16 @@
               }
             },
             {
-              "id": "status-resources",
-              "type": "block",
-              "content": { "mod": "resource-monitor" },
-              "size": { "px": 164 }
-            },
-            {
               "id": "status-hint",
               "type": "block",
               "content": { "mod": "professional-status", "props": { "role": "hint" } },
               "size": { "px": 130 }
+            },
+            {
+              "id": "status-resources",
+              "type": "block",
+              "content": { "mod": "resource-monitor" },
+              "size": { "px": 188 }
             }
           ],
           "size": {

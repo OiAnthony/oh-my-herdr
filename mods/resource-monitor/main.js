@@ -1,16 +1,17 @@
 import { View, div, svg, PathBuilder } from "gpui-kit";
-import { Button, Popover, Radio, RadioGroup, Scrollbar, Tab, Tabs, Toggle, VirtualListScrollHandle, h_flex, v_flex, v_virtual_list } from "gpui-base";
+import { Button, Popover, Radio, RadioGroup, Scrollbar, Tab, Tabs, VirtualListScrollHandle, h_flex, v_flex, v_virtual_list } from "gpui-base";
 import { agents, appHome, exec, focused, machines, panes, props, spaces, terminals, theme, window as appWindow } from "herdr";
 import { createCollector } from "./collect.js";
 import { buildResources, buildSystemResources, MemoryHistory } from "./model.js";
 import { buildResourceTree, processRows, portRows, resourceRows } from "./tree.js";
-import { bytes, cpu, footerCpu, footerCpuColor, endpoint, clean } from "./format.js";
+import { bytes, cpu, footerBytes, footerCpu, footerCpuColor, endpoint, clean } from "./format.js";
 
 const ROW = 28;
 const LIST = "resource-monitor-rows";
 const icon = name => svg(`mods/workspace-chrome/${name}.svg`).size(13).flex_none();
 const machineOf = terminal => terminal.machine ?? (terminal.address?.includes("/") ? terminal.address.slice(0, terminal.address.indexOf("/")) : null);
 const age = (at, now) => at ? `${Math.max(0, Math.floor((now - at) / 1000))}s ago` : "Not sampled";
+const numericFont = () => appWindow()?.platform === "macos" ? "Menlo" : appWindow()?.platform === "windows" ? "Consolas" : "monospace";
 
 export default class ResourceMonitor extends View {
   init(_props, cx) {
@@ -18,7 +19,6 @@ export default class ResourceMonitor extends View {
     this.hovered = false;
     this.tab = "tree";
     this.scope = "herdr";
-    this.showPorts = false;
     this.closed = false;
     this.generation = 0;
     this.collector = createCollector(exec, platform => `${appHome()}/mods/resource-monitor/bin/herdr-resource-sample${platform === "windows" ? ".exe" : ""}`);
@@ -44,13 +44,14 @@ export default class ResourceMonitor extends View {
     this.handle = cx.focus_handle();
     // Popover handles these as actions before raw key events reach this view.
     cx.bind_keys([
-      { keystroke: "escape", action: "resource_monitor_escape", context: "ResourceManager" },
-      { keystroke: "space", action: "resource_monitor_space", context: "ResourceManager" },
-      { keystroke: "enter", action: "resource_monitor_enter", context: "ResourceManager" }
+      { keystroke: "escape", action: "resource_monitor_escape", context: "TaskManager" },
+      { keystroke: "space", action: "resource_monitor_space", context: "TaskManager" },
+      { keystroke: "enter", action: "resource_monitor_enter", context: "TaskManager" }
     ]);
     this.scroll = VirtualListScrollHandle.new();
     this.currentSpace = focused()?.space ?? spaces().find(s => s.active)?.id ?? null;
     this.refresh(cx);
+    if (this.open) this.locatePane(cx);
     this.schedule(cx);
   }
 
@@ -132,6 +133,7 @@ export default class ResourceMonitor extends View {
     if (open) this.escapeDown = false;
     if (this.scope !== "herdr") this.setScope("herdr", cx);
     else if (open) { this.portsAt.clear(); this.refresh(cx); }
+    if (open) this.locatePane(cx);
     cx.notify();
   }
 
@@ -198,7 +200,7 @@ export default class ResourceMonitor extends View {
       const connection = this.connections.get(key);
       const token = {};
       const roots = terminals().filter(t => t.state === "live" && (machineOf(t) ?? "") === key).map(t => t.pid);
-      const ports = this.open && (this.tab === "ports" || (this.tab === "tree" && this.showPorts)) && Date.now() - (this.portsAt.get(key) ?? 0) >= 5000;
+      const ports = this.open && (this.tab === "ports" || this.tab === "tree") && Date.now() - (this.portsAt.get(key) ?? 0) >= 5000;
       if (ports) this.portsAt.set(key, Date.now());
       this.inflight.set(key, token);
       cx.spawn(async cx => {
@@ -242,15 +244,14 @@ export default class ResourceMonitor extends View {
     this.searching = this.query.length > 0;
     const nodes = this.viewNodes(), snapshots = this.viewSnapshots();
     if (reveal) this.revealSearch = this.searching;
-    this.tree = this.tab !== "tree" ? [] : buildResourceTree(nodes, { query: this.query, showPorts: this.showPorts });
+    this.tree = this.tab !== "tree" ? [] : buildResourceTree(nodes, { query: this.query });
     if (this.tab === "tree" && (reveal || (this.searching && this.revealSearch))) {
       const visit = node => { this.expanded.add(node.id); node.children.forEach(visit); };
       this.tree.forEach(visit);
     }
     this.rows = this.tab === "ports" ? portRows(snapshots, { query: this.query, sort: this.sort, now: this.now, managed: this.scope === "herdr" ? this.nodes : null })
       : this.tab === "processes" ? processRows(nodes, { query: this.query, sort: this.sort })
-      : resourceRows(this.tree, { expanded: this.expanded, sort: this.sort, currentSpace: this.currentSpace })
-        .filter(row => this.showPorts || row.type !== "port");
+      : resourceRows(this.tree, { expanded: this.expanded, sort: this.sort, currentSpace: this.currentSpace });
     if (!this.rows.some(row => row.id === this.selected)) this.selected = this.rows[0]?.id ?? null;
   }
 
@@ -270,6 +271,7 @@ export default class ResourceMonitor extends View {
   locatePane(cx) {
     const focus = focused();
     if (!focus?.pane && !focus?.terminal) return;
+    this.rebuild();
     if (this.scope !== "herdr") this.setScope("herdr", cx);
     this.tab = "tree";
     if (this.sort === "port" || this.sort === "pid") this.sort = "memory";
@@ -285,7 +287,7 @@ export default class ResourceMonitor extends View {
     };
     this.tree.forEach(node => find(node, []));
     if (target) {
-      target.slice(0, -1).forEach(node => this.expanded.add(node.id));
+      target.forEach(node => this.expanded.add(node.id));
       this.flatten();
       this.selected = target.at(-1).id;
       this.scroll.scroll_to_item(this.rows.findIndex(row => row.id === this.selected), "center");
@@ -358,16 +360,19 @@ export default class ResourceMonitor extends View {
       .child(svg(`mods/resource-monitor/${asset}.svg`).size(13));
   }
 
-  spark(node, t) {
+  spark(node, t, full = false) {
     const samples = this.history.get(node);
-    if (samples.length < 2) return div().w(48).flex_none().text_right().text_color(t.muted).tooltip("Not enough samples").child("—");
+    const chart = div().h(full ? 36 : 14)
+      .when(full, el => el.flex_1().min_w(0))
+      .when(!full, el => el.w(48).flex_none());
+    if (samples.length < 2) return chart.text_right().text_color(t.muted).tooltip("Not enough samples").child("—");
     const min = Math.min(...samples), span = Math.max(...samples) - min || 1;
     const path = PathBuilder.stroke(1.3);
     samples.forEach((value, i) => {
       const x = `${i * 100 / (samples.length - 1)}%`, y = `${95 - (value - min) * 90 / span}%`;
       if (i) path.line_to(x, y); else path.move_to(x, y);
     });
-    return div().w(48).h(14).flex_none().child(globalThis.window.paint_path(path.build(), t.accent).size_full());
+    return chart.child(globalThis.window.paint_path(path.build(), t.accent).size_full());
   }
 
   row(row, t) {
@@ -375,7 +380,7 @@ export default class ResourceMonitor extends View {
     const base = h_flex().h(ROW).w_full().px(12).gap(8).items_center().text_size(11)
       .when(row.id === this.selected, el => el.bg(t.selected)).hover(el => el.bg(t.hover));
     const name = div().flex_1().min_w(0).pl(Math.min(row.depth, 6) * 10).truncate();
-    const value = (text, width) => div().w(width).flex_none().text_right().child(text);
+    const value = (text, width) => div().w(width).flex_none().font_family(numericFont()).text_right().child(text);
     if (type === "listener") return base.text_color(t.muted)
       .child(name.tooltip(`${node.machine ?? "This computer"} · ${endpoint(row.port)} · TCP LISTEN · ${age(node.at, this.now)}${node.message ? ` · ${clean(node.message)}` : ""}`)
         .child(`${endpoint(row.port)}${node.stale ? " · stale" : ""}`))
@@ -387,7 +392,7 @@ export default class ResourceMonitor extends View {
     if (type === "detail") {
       const ports = this.viewSnapshots().get(node.machine ?? "")?.listeners;
       const detail = [node.directChildren === null ? "Child counts unknown" : `${node.directChildren} children · ${node.descendants} descendants`,
-        this.showPorts ? (ports?.state === "ready" ? `${node.ports.length} listeners` : ports?.message) : null,
+        ports?.state === "ready" ? `${node.ports.length} listeners` : ports?.message,
         node.message].filter(Boolean).join(" · ");
       return base.text_color(t.muted).child(name.tooltip(clean(detail)).child(clean(detail)));
     }
@@ -427,7 +432,7 @@ export default class ResourceMonitor extends View {
 
   footerSignature() {
     const s = this.summary();
-    return JSON.stringify([s.machine, footerCpu(s.cpu), bytes(s.memory), Boolean(s.root?.unknown), s.root?.message]);
+    return JSON.stringify([s.machine, footerCpu(s.cpu), footerBytes(s.memory), Boolean(s.root?.unknown), s.root?.message]);
   }
 
   panelSignature() {
@@ -445,7 +450,7 @@ export default class ResourceMonitor extends View {
           p && [p.pid, p.ppid, p.start, p.name, cpu(p.cpu), bytes(p.memory), bytes(p.resident)],
           row.port && endpoint(row.port)];
       }),
-      (this.tab === "ports" || (this.tab === "tree" && this.showPorts)) &&
+      (this.tab === "ports" || this.tab === "tree") &&
         [...this.viewSnapshots().values()].map(s => [s.listeners?.state, s.listeners?.scope, s.listeners?.message]),
       this.tab === "tree" && s.root && this.history.get(s.root)
     ]);
@@ -454,6 +459,11 @@ export default class ResourceMonitor extends View {
   panel(cx) {
     const t = theme(), summary = this.summary(this.scope), snapshots = this.viewSnapshots();
     const pendingPorts = !snapshots.size || [...snapshots.values()].some(s => !s.listeners?.at && !["error", "unavailable"].includes(s.processes?.state));
+    const summaryInfo = [summary.machine ?? "This computer", this.scope === "system" ? "Readable processes" : "Managed processes",
+      ...(summary.root?.unknown ? ["Partial data"] : []), age(summary.root?.at, this.now)];
+    if (summary.root?.message) summaryInfo.push(clean(summary.root.message));
+    if (this.tab === "ports" || this.tab === "tree") summaryInfo.push(pendingPorts ? "Loading listening ports…"
+      : [...snapshots.values()].some(s => s.listeners?.state !== "ready") ? "Listener coverage incomplete" : "TCP LISTEN");
     const viewport = globalThis.window.viewport_size();
     const tab = (id, label) => Tab.new(`resource-tab-${id}`).selected(this.tab === id)
       .accessibility_label(label)
@@ -476,11 +486,11 @@ export default class ResourceMonitor extends View {
         range => this.rows.slice(range.start, range.end).map(row => this.row(row, t)))
         .size_full().track_scroll(this.scroll).on_item_click((id, cx) => this.activate(id, cx)))
       .child(Scrollbar.vertical(LIST).viewport_from_layout().absolute().inset_0());
-    return v_flex().id("resource-manager")
+    return v_flex().id("task-manager")
       .w(Math.min(416, viewport.width * 0.95)).h(Math.min(640, viewport.height * 0.85))
       .track_focus(this.handle).bg(t.popover).text_color(t.foreground).text_size(11).rounded(8)
-      .border_1().border_color(t.border).overflow_hidden().role("group").accessibility_label("Resource Manager")
-      .key_context("ResourceManager")
+      .border_1().border_color(t.border).overflow_hidden().role("group").accessibility_label("Task Manager")
+      .key_context("TaskManager")
       .on_action("resource_monitor_escape", (_e, cx) => this.escape(cx))
       .on_action("resource_monitor_space", (_e, cx) => this.key({ key: "space", modifiers: {} }, cx))
       .on_action("resource_monitor_enter", (_e, cx) => this.key({ key: "enter", modifiers: {} }, cx))
@@ -488,17 +498,18 @@ export default class ResourceMonitor extends View {
       .on_key_up(e => { if (e.key === "escape") this.escapeDown = false; })
       .child(h_flex().px(12).h(32).flex_none().gap(6).items_center().border_b(1).border_color(t.border)
         .child(svg("mods/resource-monitor/memory.svg").size(12).text_color(t.muted))
-        .child(div().flex_1().font_medium().child("Resource Manager"))
+        .child(div().flex_1().font_medium().child("Task Manager"))
         .when(this.tab === "tree", el => el
           .child(this.iconButton("resource-expand-all", "Expand all", "expand-all", (_e, cx) => this.expandAll(true, cx)))
           .child(this.iconButton("resource-collapse-all", "Collapse all", "collapse-all", (_e, cx) => this.expandAll(false, cx))))
         .child(this.iconButton("resource-locate-pane", "Locate current pane", "locate", (_e, cx) => this.locatePane(cx)))
         .child(this.iconButton("resource-refresh", "Refresh", "refresh", (_e, cx) => { this.portsAt.clear(); this.refresh(cx); }))
         .child(this.iconButton("resource-close", "Close", "close", (_e, cx) => this.setOpen(false, cx))))
-      .child(h_flex().px(12).py(6).gap(8).flex_none().items_center()
-        .child(div().text_color(t.muted).child("Scope"))
+      .child(h_flex().px(12).py(6).gap(8).flex_none().items_center().justify_between()
+        .child(Tabs.new("resource-tabs").flex().flex_row().gap(4).flex_none()
+          .child(tab("tree", "Tree")).child(tab("processes", "Processes")).child(tab("ports", "Ports")))
         .child(RadioGroup.new("resource-scope").axis("horizontal").accessibility_label("Resource scope")
-          .flex().flex_row().gap(2).p(2).rounded(5).border_1().border_color(t.border)
+          .flex().flex_row().gap(2).p(2).rounded(5).border_1().border_color(t.border).flex_none()
           .children([["herdr", "Herdr"], ["system", "System"]].map(([scope, label]) => div()
             .tooltip(scope === "herdr" ? "Herdr-managed terminals and their OS descendants; excludes the Desktop and Core apps themselves"
               : "All enumerable processes on each machine; CPU and memory depend on current-user permissions")
@@ -507,32 +518,16 @@ export default class ResourceMonitor extends View {
               .text_color(this.scope === scope ? t.foreground : t.muted).bg(this.scope === scope ? t.selected : t.popover)
               .hover(el => el.bg(t.hover)).accessibility_label(`${label} scope`)
               .on_change((checked, cx) => { if (checked) this.setScope(scope, cx); }).child(label))))))
-      .child(h_flex().px(12).py(4).gap(4).flex_none()
-        .child(Tabs.new("resource-tabs").flex().flex_row().gap(4)
-          .child(tab("tree", "Tree")).child(tab("processes", "Processes")).child(tab("ports", "Ports")))
-        .child(div().flex_1())
-        .when(this.tab === "tree", el => el.child(Toggle.new("resource-show-ports").pressed(this.showPorts)
-          .h(24).px(6).rounded(4).text_size(11).text_color(this.showPorts ? t.accent : t.muted)
-          .bg(this.showPorts ? t.selected : t.popover).hover(el => el.bg(t.hover))
-          .tab_index(0).accessibility_label("Show listening ports")
-          .on_change((value, cx) => {
-            this.showPorts = value;
-            this.portsAt.clear();
-            this.flatten();
-            if (value) this.refresh(cx);
-            cx.notify();
-          }).child(this.showPorts ? "Ports on" : "Ports off"))))
-      .child(v_flex().px(12).py(8).gap(4).border_b(1).border_color(t.border).flex_none()
-        .child(h_flex().gap(12).items_center().child(cpu(summary.cpu)).child(`${bytes(summary.memory)} ${summary.root?.metric ?? "memory"}`)
-          .when(this.tab === "tree" && Boolean(summary.root), el => el.child(this.spark(summary.root, t))))
-        .child(div().text_color(t.muted).tooltip("Process totals, not host used memory; shared pages may be counted more than once. CPU 100% equals one core. Sampling pauses when the app is inactive.")
-          .child(`${summary.machine ?? "This computer"} · ${this.scope === "system" ? "Readable processes" : "Managed processes"}${summary.root?.unknown ? " · Partial data" : ""} · ${age(summary.root?.at, this.now)}`))
-        .when(Boolean(summary.root?.message), el => el.child(div().text_color(t.muted).child(clean(summary.root.message))))
-        .when(this.tab === "ports" || (this.tab === "tree" && this.showPorts), el => el
-          .child(div().text_color(t.muted).tooltip("TCP listening sockets only; not verified web services. Coverage depends on current-user permissions.")
-            .child(pendingPorts ? "Loading listening ports…"
-              : [...snapshots.values()].some(s => s.listeners?.state !== "ready")
-                ? "Listener coverage incomplete" : "TCP LISTEN"))))
+      .child(h_flex().w_full().px(12).py(8).gap(12).border_b(1).border_color(t.border).flex_none().items_center()
+        .tooltip(`${summaryInfo.join(" · ")}. ${summary.root?.metric ?? "Memory"} process totals, not host used memory; shared pages may be counted more than once. CPU 100% equals one core. Sampling pauses when the app is inactive.`)
+        .child(v_flex().gap(4).flex_none()
+          .child(h_flex().gap(8).items_center()
+            .child(div().w(48).flex_none().text_color(t.muted).child("CPU"))
+            .child(div().w(76).flex_none().font_family(numericFont()).text_right().child(cpu(summary.cpu))))
+          .child(h_flex().gap(8).items_center()
+            .child(div().w(48).flex_none().text_color(t.muted).child("Memory"))
+            .child(div().w(76).flex_none().font_family(numericFont()).text_right().child(bytes(summary.memory)))))
+        .when(this.tab === "tree" && Boolean(summary.root), el => el.child(this.spark(summary.root, t, true))))
       .when(this.searching, el => el.child(h_flex().px(12).py(6).gap(8).flex_none().items_center()
         .accessibility_label(`Filter: ${this.query}`)
         .child(div().flex_1().min_w(0).truncate().tooltip(this.query).child(`Filter: ${this.query}`))
@@ -558,23 +553,23 @@ export default class ResourceMonitor extends View {
     this.now = Date.now();
     this.rebuild();
     const t = theme(), summary = this.summary();
-    const memory = bytes(summary.memory), load = footerCpu(summary.cpu), loadColor = footerCpuColor(summary.cpu, t);
+    const memory = footerBytes(summary.memory), load = footerCpu(summary.cpu), loadColor = footerCpuColor(summary.cpu, t);
     const label = `CPU ${load} · memory ${memory}`;
-    const font = appWindow()?.platform === "macos" ? "Menlo" : appWindow()?.platform === "windows" ? "Consolas" : "monospace";
-    const trigger = Button.new("resource-status-trigger").w(152).h(22).px(4).flex_none().justify_start().rounded(4).text_size(11).text_color(t.muted)
-      .tab_index(0).accessibility_label(`Resources: ${label}`)
-      .tooltip(`${summary.machine ?? "This computer"} · ${summary.root?.metric ?? "memory"} ${memory} · CPU ${load}${summary.root?.unknown ? " · Coverage incomplete" : ""}`)
+    const font = numericFont();
+    const trigger = Button.new("resource-status-trigger").w(148).h(22).px(4).flex_none().justify_start().rounded(4).text_size(11).text_color(t.muted)
+      .tab_index(0).accessibility_label(`Task Manager: ${label}`)
+      .tooltip(`Task Manager · ${summary.machine ?? "This computer"} · ${summary.root?.metric ?? "memory"} ${bytes(summary.memory)} · CPU ${cpu(summary.cpu)}${summary.root?.unknown ? " · Coverage incomplete" : ""}`)
       .on_hover((hovered, cx) => { this.hovered = hovered; cx.notify(); })
       .hover(el => el.bg(t.hover).text_color(t.foreground))
       .child(h_flex().gap(0).items_center().flex_none()
         .child(h_flex().gap(3).items_center().flex_none()
           .child(svg("mods/resource-monitor/activity.svg").size(12).flex_none().text_color(loadColor))
-          .child(div().flex_none().font_family(font).text_left().text_color(loadColor).child(load)))
+          .child(div().w(40).flex_none().font_family(font).text_left().text_color(loadColor).child(load)))
         .child(div().flex_none().font_family(font).text_color(t.dim).child(" · "))
         .child(h_flex().gap(3).items_center().flex_none()
           .child(svg("mods/resource-monitor/memory.svg").size(12).flex_none())
-          .child(div().flex_none().font_family(font).text_left().child(memory))));
-    return h_flex().size_full().px(6).items_center().bg(t.chrome).border_t(1).border_color(t.border)
+          .child(div().w(48).flex_none().font_family(font).text_left().child(memory))));
+    return h_flex().size_full().px(6).items_center().justify_end().bg(t.chrome).border_t(1).border_color(t.border)
       .child(Popover.new("resource-status-popover").open(this.open).anchor("bottom_right").track_focus(this.handle).overlay_closable(true)
         .on_open_change((open, cx) => this.setOpen(open, cx)).trigger(trigger).when(this.open, el => el.content(this.panel(cx))));
   }

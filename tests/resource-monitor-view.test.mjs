@@ -5,17 +5,17 @@ import { readFileSync } from "node:fs";
 import { createCollector } from "../mods/resource-monitor/collect.js";
 import { buildResources, buildSystemResources, MemoryHistory } from "../mods/resource-monitor/model.js";
 import { buildResourceTree, processRows, portRows, resourceRows } from "../mods/resource-monitor/tree.js";
-import { bytes, cpu, footerCpu, footerCpuColor, endpoint, clean } from "../mods/resource-monitor/format.js";
+import { bytes, cpu, footerBytes, footerCpu, footerCpuColor, endpoint, clean } from "../mods/resource-monitor/format.js";
 
 const source = readFileSync(new URL("../mods/resource-monitor/main.js", import.meta.url), "utf8")
   .replace(/^import .+;\n/gm, "").replace("export default class ResourceMonitor", "globalThis.ResourceMonitor = class ResourceMonitor");
 const walk = node => typeof node === "string" ? [] : [node, ...node.items.flatMap(walk)];
 const text = node => typeof node === "string" ? [node] : node.items.flatMap(text);
 const button = (ui, id) => walk(ui).find(node => node.attributes.id === id);
-function fixture({ delayed = false } = {}) {
+function fixture({ delayed = false, initial = {} } = {}) {
   const host = { active: true, delayed, notifications: 0, calls: [], jobs: [], timers: [],
     theme: { ansi2: "#4ade80", ansi3: "#facc15", ansi1: "#f87171", muted: "#9198a1" },
-    terminals: [{ address: "t1", pid: 10, state: "live", labels: { "herdr.tab": "tab1" } }] };
+    terminals: [{ address: "t1", pid: 10, state: "live", labels: { "herdr.tab": "tab1" } }], ...initial };
   const handle = () => ({ released: false, focus() {}, scroll_to_item(index, strategy) { host.scroll = { index, strategy }; }, release() { this.released = true; } });
   const element = kind => {
     const node = { kind, items: [], attributes: {} };
@@ -44,7 +44,7 @@ function fixture({ delayed = false } = {}) {
   };
   const context = vm.createContext({
     Date,
-    View: class {}, Button: component("button"), Popover: component("popover"), Radio: component("radio"), RadioGroup: component("radio-group"), Tab: component("tab"), Tabs: component("tabs"), Toggle: component("toggle"),
+    View: class {}, Button: component("button"), Popover: component("popover"), Radio: component("radio"), RadioGroup: component("radio-group"), Tab: component("tab"), Tabs: component("tabs"),
     PathBuilder: { stroke: () => ({ move_to() {}, line_to() {}, build() { return {}; } }) },
     window: { paint_path: () => element("path"), viewport_size: () => host.viewport ?? { width: 1200, height: 1000 } },
     Scrollbar: { vertical: () => element("scrollbar") },
@@ -55,8 +55,8 @@ function fixture({ delayed = false } = {}) {
       return node;
     },
     VirtualListScrollHandle: { new: handle },
-    createCollector, buildResources, buildSystemResources, MemoryHistory, buildResourceTree, processRows, portRows, resourceRows, bytes, cpu, footerCpu, footerCpuColor, endpoint, clean,
-    props: () => ({}), appHome: () => "/fixture-home",
+    createCollector, buildResources, buildSystemResources, MemoryHistory, buildResourceTree, processRows, portRows, resourceRows, bytes, cpu, footerBytes, footerCpu, footerCpuColor, endpoint, clean,
+    props: () => host.props ?? {}, appHome: () => "/fixture-home",
     appWindow: () => ({ active: host.active, platform: "macos" }),
     focused: () => host.focus ?? { space: "s1" }, terminals: () => host.terminals,
     spaces: () => [{ id: "s1", active: true, tabs: [{ id: "tab1" }] }],
@@ -79,7 +79,7 @@ function fixture({ delayed = false } = {}) {
   view.init({}, cx);
   const flush = async () => { while (host.jobs.length) await Promise.all(host.jobs.splice(0)); };
   const dispatchKey = key => {
-    const panel = button(view.panel(cx), "resource-manager");
+    const panel = button(view.panel(cx), "task-manager");
     const binding = host.bindings.find(binding => binding.keystroke === key && binding.context === panel.attributes.key_context);
     if (binding) panel.actions[binding.action]({}, cx);
     // Popover's Confirm/Cancel actions dispatch before raw key events.
@@ -122,7 +122,8 @@ test("footer CPU uses stable tenths, integer percentages above 100, and a themed
     [null, "—"], [NaN, "—"], [Infinity, "—"], [0, "0.0%"],
     [0.1, "0.1%"], [1, "1.0%"], [5.78, "5.8%"], [9.99, "10.0%"], [9.999, "10.0%"],
     [10, "10.0%"], [99.9, "99.9%"], [99.99, "100%"], [100, "100%"],
-    [120, "120%"], [400, "400%"], [1600, "1600%"]
+    [120, "120%"], [400, "400%"], [999.4, "999%"], [999.5, "1.00k%"],
+    [1600, "1.60k%"], [9994, "9.99k%"], [9999, "10.0k%"], [999499, "999k%"], [999500, "1.00M%"]
   ]) {
     value = sample;
     assert.equal(text(view.render(cx))[0], expected);
@@ -136,13 +137,25 @@ test("footer CPU uses stable tenths, integer percentages above 100, and a themed
   assert.notEqual(view.footerSignature(), before);
   for (const [sample, expected] of [
     [null, host.theme.muted], [0, host.theme.ansi2], [25, "#a2d54b"],
-    [50, host.theme.ansi3], [75, "#f99f43"], [100, host.theme.ansi1], [120, host.theme.ansi1]
+    [50, host.theme.ansi3], [75, "#f99f43"], [100, host.theme.ansi1], [120, host.theme.ansi1], [1600, host.theme.ansi1]
   ]) {
     value = sample;
     const row = button(view.render(cx), "resource-status-trigger").items[0].items[0];
     assert.equal(row.items[0].attributes.text_color, expected);
     assert.equal(row.items[1].attributes.text_color, expected);
   }
+});
+
+test("footer memory keeps at most three digits across rounding and binary unit boundaries without changing panel precision", () => {
+  for (const [value, expected] of [
+    [null, "—"], [NaN, "—"], [Infinity, "—"], [0, "0.00 KB"],
+    [999.4 * 1024, "999 KB"], [999.5 * 1024, "0.98 MB"],
+    [1023.9 * 1024 ** 2, "1.00 GB"], [1.24 * 1024 ** 3, "1.24 GB"],
+    [12.4 * 1024 ** 3, "12.4 GB"], [124 * 1024 ** 3, "124 GB"],
+    [999.5 * 1024 ** 3, "0.98 TB"], [1024 ** 6, "1.00 EB"]
+  ]) assert.equal(footerBytes(value), expected);
+  assert.equal(bytes(999.5 * 1024 ** 2), "999.5 MB");
+  assert.equal(cpu(1600), "1600.0%");
 });
 
 test("footer shows CPU and memory without approximation or terminal count, and refreshes CPU-only changes", async t => {
@@ -174,7 +187,7 @@ test("footer popover resolves its panel size in pixels before anchoring, includi
     host.viewport = viewport;
     const ui = view.render(cx);
     const popover = button(ui, "resource-status-popover");
-    const panel = button(ui, "resource-manager");
+    const panel = button(ui, "task-manager");
     assert.equal(popover.attributes.anchor, "bottom_right");
     assert.equal(panel.attributes.w, width);
     assert.equal(panel.attributes.h, height);
@@ -197,7 +210,7 @@ test("an open Tree panel redraws when displayed CPU changes, and skips unchanged
   assert.ok(host.notifications > notifications);
 });
 
-test("Tree combines resource hierarchy, filters and memory trend without collecting ports by default", async t => {
+test("Tree combines resource hierarchy, filters and memory trend with default listener sampling", async t => {
   t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
   const { host, view, cx, flush, tick } = fixture();
   t.after(() => view.close());
@@ -206,10 +219,12 @@ test("Tree combines resource hierarchy, filters and memory trend without collect
   t.mock.timers.tick(1000);
   await tick();
   view.open = true;
+  await tick();
   const ui = view.panel(cx);
   assert.equal(view.tab, "tree");
   assert.ok(walk(ui).some(node => node.kind === "path"));
-  assert.ok(host.calls.every(args => !args.includes("--ports") && args.includes("--scope=herdr")));
+  assert.ok(host.calls.at(-1).includes("--ports"));
+  assert.ok(host.calls.every(args => args.includes("--scope=herdr")));
   view.query = "shell 10";
   view.flatten(true);
   assert.deepEqual(view.rows.filter(row => row.type === "process").map(row => row.process.pid), [10]);
@@ -255,50 +270,45 @@ test("Processes tab renders a flat sortable table and shares sampling without qu
   assert.equal(view.rows[0].type, "node");
 });
 
-test("Tree ports toggle gates sampling, filtering and cached port rows", async t => {
+test("Tree always samples and filters listeners while Processes and a closed panel stop scans", async t => {
+  t.mock.timers.enable({ apis: ["Date"], now: Date.now() });
   const { host, view, cx, flush, tick } = fixture();
   t.after(() => view.close());
   host.listeners = [{ pid: 10, port: 8080, family: "ipv4", address: "127.0.0.1", protocol: "tcp", socket: "listener" }];
   await flush();
   assert.equal(host.calls[0].includes("--ports"), false);
-  view.open = true;
-  view.refresh(cx);
-  await flush();
-  assert.equal(host.calls.at(-1).includes("--ports"), false);
-  button(view.panel(cx), "resource-show-ports").attributes.on_change(true, cx);
+  view.setOpen(true, cx);
   await flush();
   assert.equal(host.calls.at(-1).includes("--ports"), true);
-  assert.equal(walk(view.panel(cx)).filter(node => node.kind === "input").length, 0);
-  view.query = "shell 10";
+  view.query = "shell 8080";
   view.flatten(true);
-  assert.ok(view.rows.some(row => row.type === "port" && row.port.port === 8080));
+  assert.deepEqual(view.rows.filter(row => row.type === "port").map(row => row.port.port), [8080]);
   const metadata = view.snapshots.get("").listeners.processes;
+  t.mock.timers.tick(1000);
   await tick();
   assert.equal(host.calls.at(-1).includes("--ports"), false);
   assert.equal(view.snapshots.get("").listeners.processes, metadata);
-  view.query = "shell 8080";
-  view.flatten();
-  view.portsAt.clear();
+  t.mock.timers.tick(4000);
   await tick();
-  assert.equal(host.calls.at(-1).includes("--scope=herdr"), true);
+  assert.equal(host.calls.at(-1).includes("--ports"), true);
   assert.equal(view.snapshots.get("").listeners.scope, "managed");
-  button(view.panel(cx), "resource-show-ports").attributes.on_change(false, cx);
   assert.equal(view.query, "shell 8080");
-  assert.ok(view.rows.every(row => row.type !== "port"));
-  assert.equal(walk(view.panel(cx)).filter(node => node.kind === "input").length, 0);
-  await tick();
-  assert.equal(host.calls.at(-1).includes("--ports"), false);
-  button(view.panel(cx), "resource-show-ports").attributes.on_change(true, cx);
-  await flush();
   button(view.panel(cx), "resource-tab-processes").attributes.on_click({}, cx);
-  view.portsAt.clear();
+  t.mock.timers.tick(5000);
   await tick();
   assert.equal(host.calls.at(-1).includes("--ports"), false);
   button(view.panel(cx), "resource-tab-tree").attributes.on_click({}, cx);
   await flush();
   assert.equal(host.calls.at(-1).includes("--ports"), true);
-  view.open = false;
-  view.portsAt.clear();
+  view.setScope("system", cx);
+  await flush();
+  assert.ok(host.calls.at(-1).includes("--scope=system"));
+  assert.ok(host.calls.at(-1).includes("--ports"));
+  view.query = "shell 8080";
+  view.flatten(true);
+  assert.deepEqual(view.rows.filter(row => row.type === "port").map(row => row.port.port), [8080]);
+  view.setOpen(false, cx);
+  t.mock.timers.tick(5000);
   await tick();
   assert.equal(host.calls.at(-1).includes("--ports"), false);
 });
@@ -319,7 +329,7 @@ test("closing the owning view releases handles and ignores an already dispatched
 
 const press = (view, cx, key, extra = {}) => {
   view.key({ key, key_char: key.length === 1 ? key : undefined, modifiers: {}, ...extra }, cx);
-  if (!extra.is_held) button(view.panel(cx), "resource-manager").attributes.on_key_up({ key });
+  if (!extra.is_held) button(view.panel(cx), "task-manager").attributes.on_key_up({ key });
 };
 
 test("typing filters both tabs, spaces combine keywords, Backspace edits, and Escape clears before closing", async t => {
@@ -346,7 +356,7 @@ test("typing filters both tabs, spaces combine keywords, Backspace edits, and Es
     assert.equal(view.query, "");
     assert.equal(view.searching, false);
     assert.ok(view.rows.length >= before);
-    const panel = button(view.panel(cx), "resource-manager");
+    const panel = button(view.panel(cx), "task-manager");
     view.query = "worker";
     view.flatten(true);
     panel.actions.resource_monitor_escape({}, cx);
@@ -358,10 +368,9 @@ test("typing filters both tabs, spaces combine keywords, Backspace edits, and Es
   press(view, cx, "escape");
   assert.equal(view.open, false);
   assert.equal(host.stopped, true);
-  assert.equal(host.bindings[0].context, "ResourceManager");
 });
 
-test("Resource Manager actions override Popover space and Enter bindings before raw key events", async t => {
+test("Task Manager actions override Popover space and Enter bindings before raw key events", async t => {
   const { view, cx, dispatchKey, flush } = fixture();
   t.after(() => view.close());
   await flush();
@@ -410,6 +419,41 @@ test("shortcuts and navigation never enter the query, while spaces and Unicode a
   assert.equal(view.query, "/");
 });
 
+test("opening and reopening locates and expands the current pane, including before samples arrive", async t => {
+  for (const initiallyOpen of [false, true]) {
+    const { host, view, cx, flush } = fixture({ initial: {
+      props: { open: initiallyOpen },
+      panes: [{ pane: "p1", terminal: "t1", tab: "tab1", title: "Shell pane" }],
+      focus: { space: "s1", pane: "p1", terminal: "t1" }
+    } });
+    t.after(() => view.close());
+    if (!initiallyOpen) view.setOpen(true, cx);
+    const pane = view.rows.find(row => row.id === view.selected);
+    assert.equal(pane.node.pane, "p1");
+    assert.ok(view.rows.some(row => row.type === "detail" && row.node.pane === "p1"));
+    await flush();
+    assert.ok(view.rows.some(row => row.type === "process" && row.node.pane === "p1" && row.process.pid === 10));
+    button(view.panel(cx), "resource-collapse-all").attributes.on_click({}, cx);
+    button(view.panel(cx), "resource-tab-processes").attributes.on_click({}, cx);
+    view.setScope("system", cx);
+    await flush();
+    view.query = "not present";
+    view.flatten();
+    view.setOpen(false, cx);
+    host.focus = { space: "s1", pane: "p2", terminal: "t1" };
+    host.panes = [{ pane: "p2", terminal: "t1", tab: "tab1", title: "New pane" }];
+    view.setOpen(true, cx);
+    await flush();
+    assert.equal(view.scope, "herdr");
+    assert.equal(view.tab, "tree");
+    assert.equal(view.query, "");
+    assert.equal(view.rows.find(row => row.id === view.selected).node.pane, "p2");
+    assert.ok(view.rows.some(row => row.type === "process" && row.node.pane === "p2" && row.process.pid === 10));
+    assert.equal(host.scroll.index, view.rows.findIndex(row => row.id === view.selected));
+    assert.equal(host.scroll.strategy, "center");
+  }
+});
+
 test("bulk tree actions and locate reveal the focused pane through collapsed ancestors and filters", async t => {
   const { host, view, cx, flush } = fixture();
   t.after(() => view.close());
@@ -427,6 +471,8 @@ test("bulk tree actions and locate reveal the focused pane through collapsed anc
   button(view.panel(cx), "resource-locate-pane").attributes.on_click({}, cx);
   assert.equal(view.query, "");
   assert.equal(view.rows.find(row => row.id === view.selected).node.pane, "p1");
+  assert.ok(view.rows.some(row => row.type === "process" && row.node.pane === "p1" && row.process.pid === 10));
+  assert.ok(view.rows.some(row => row.type === "detail" && row.node.pane === "p1"));
   assert.equal(host.scroll.index, view.rows.findIndex(row => row.id === view.selected));
   assert.equal(host.scroll.strategy, "center");
   button(view.panel(cx), "resource-tab-ports").attributes.on_click({}, cx);
@@ -592,7 +638,7 @@ test("locating a pane leaves System and reveals the managed pane while search ne
   host.focus = { space: "s1", pane: "p1", terminal: "t1" };
   await flush();
   view.open = true;
-  button(view.panel(cx), "resource-show-ports").attributes.on_change(true, cx);
+  view.refresh(cx);
   await flush();
   press(view, cx, "x");
   await tick();

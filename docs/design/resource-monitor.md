@@ -1,12 +1,12 @@
-# Resources 原生监控设计
+# Task Manager 原生监控设计
 
 目标版本为 Herdr Desktop 0.1.15。本文记录资源采集架构、JSON 协议和性能口径；构建、测试与实机验证步骤见[开发指南](../development.md)，历史验收记录见 [Changelog](../../CHANGELOG.md#资源监控历史验收记录)。
 
 ## 功能与边界
 
-Professional footer 直接显示 Herdr 受管 CPU 和内存，不随弹层作用域变化。点击打开同一 View 的 Resource Manager。使用原生 Popover、RadioGroup、Tab、虚拟列表与主题色，宽度上限 416 px，高度上限 640 px。标题下的 `Herdr / System` 两段选择器统一控制 Tree、Processes、Ports。每次打开默认 Herdr，不持久化范围；打开期间切换页签保留范围。切换范围保留关键词与排序，重置滚动位置。Tree 的 Ports 默认关闭，仅控制监听行显示。
+Professional footer 最右侧显示 Herdr 受管 CPU 和内存，不随弹层作用域变化。点击打开同一 View 的 Task Manager。使用原生 Popover、RadioGroup、Tab、虚拟列表与主题色，宽度上限 416 px，高度上限 640 px。标题下方左侧为 Tree、Processes、Ports 页签，右侧为统一控制三个页签的 `Herdr / System` 选择器，同行使用 space-between 布局。每次打开返回 Herdr Tree，清空过滤并定位、展开当前 pane；打开期间切换页签保留范围。切换范围保留关键词与排序，重置滚动位置。Tree 始终显示已采集的监听行，不提供 Ports 开关。
 
-三个页签均无固定搜索框。直接键入字符进入搜索，空格分隔关键词，忽略大小写且全部命中；支持跨字段匹配。Tree 和 Processes 可匹配名称、机器、PID/PPID、显示格式的 CPU 和内存，Tree 还支持所属路径与已启用的监听字段。Backspace 删除字符，第一次 Esc 清空搜索，第二次 Esc 关闭弹层；Esc 使用局部 action 绑定，优先于 Popover 的默认关闭处理。方向键和 Enter 保留导航及展开操作，空格仅用于分词。切换页签清空搜索。
+三个页签均无固定搜索框。直接键入字符进入搜索，空格分隔关键词，忽略大小写且全部命中；支持跨字段匹配。Tree 和 Processes 可匹配名称、机器、PID/PPID、显示格式的 CPU 和内存，Tree 还支持所属路径与监听字段。Backspace 删除字符，第一次 Esc 清空搜索，第二次 Esc 关闭弹层；Esc 使用局部 action 绑定，优先于 Popover 的默认关闭处理。方向键和 Enter 保留导航及展开操作，空格仅用于分词。切换页签清空搜索。
 
 Herdr 范围监控 Core 公开的 live 终端 PID 及真实 OS 后代。Tree 按 Space → Pane 展示，当前 Space 置顶；内部保留 Machine / Space / Tab / Pane 归属关系，展示时跳过 Tab 层。逻辑 parent 只定位展示层级；资源归属只使用 OS PPID。没有可靠 PID 绑定的 Desktop、Core、已脱离进程树的 daemon 和容器，不虚构计量桶。System 范围枚举各机器的 OS 进程，Tree 按机器 → PPID 层级展示，缺失父进程作为根，环打断一条边。进程节点只显示自身资源，机器汇总按身份去重，不重复累加后代。
 
@@ -14,21 +14,31 @@ Processes 使用当前范围按机器去重的进程，不先展开资源树。�
 
 Ports 提供 Endpoint / Process / PID 平表，每 5 秒按当前作用域请求 TCP 监听。Herdr 只显示受管进程的监听，System 包含受管之外的监听，没有受管终端时仍可查询本机及工作区机器。按端口号、进程名或 PID 排序，键入过滤同一行的机器、监听地址、绑定范围、进程和 PID。监听使用该次扫描的进程身份，不向新快照中复用的 PID 借用名称；Herdr 再按 machine + PID + start 筛选归属。权限不足或采集失败时保留覆盖状态，空结果不表示端口空闲。
 
-Tree 工具栏提供展开全部、收起全部和定位当前 pane。定位返回 Herdr Tree、清空过滤、展开祖先并居中选中目标，支持终端与 Mod pane。错误及监听覆盖状态留在上方状态区；图标保留 tooltip 与辅助功能名称。摘要只显示当前机器，不跨机器相加。System 标为可读进程合计，部分覆盖明确标注；内存进程合计不是系统已用内存。
+Tree 工具栏提供展开全部、收起全部和定位当前 pane。定位返回 Herdr Tree、清空过滤、展开目标及祖先并居中选中目标，支持终端与 Mod pane。摘要下方不显示常驻描述；机器、采样时间、错误与监听覆盖状态移到摘要 tooltip，行级状态保持不变。图标保留 tooltip 与辅助功能名称。摘要只显示当前机器，不跨机器相加。System 的可读进程计量与部分覆盖在 tooltip 中说明；内存进程合计不是系统已用内存。
 
 功能只读，不提供清理、结束进程或重启服务操作。不读取进程命令行、环境变量或终端内容，不持久化采样数据，不发 HTTP 请求、不转发端口。内存趋势最多保留 60 个有效点，仅存于 View 内存。
+
+### 数值排版规范
+
+Task Manager 的实时数值更新不得引起水平布局位移。footer、面板摘要、Tree 与 Processes 的 CPU／Memory 都使用固定宽度、禁止 flex 收缩的数值槽、等宽字体和右对齐；不能只固定最外层宽度，内部仍按内容宽度排列。图标、分隔符、内存单位、指标标签和相邻列不随数值位数变化而左右移动，不对数值更新添加位移动画。
+
+footer 位于命令面板提示右侧，是状态栏最后一个槽位，宽 188 px；触发按钮宽 176 px，CPU 数值槽宽 52 px，内存数值槽宽 64 px。面板摘要的 CPU／Memory 槽分别宽 64／76 px；表格保持 52／76 px。字体沿用平台等宽字体：macOS 用 Menlo，Windows 用 Consolas，其他平台用 monospace。不用空格补齐，不以省略号截断。
+
+footer 数值最多三位数字，小数点、`%` 与单位不计入。CPU 低于 100% 保留一位小数，100% 至 999% 显示整数；舍入后超过三位时使用十进制缩写，例如 `1600% → 1.60k%`，`k%` 表示千个百分点，不改成整机归一化占用。内存按数值大小显示两位、一位或零位小数，例如 `1.24 GB / 12.4 GB / 124 GB`。单位仍按 1024 换算；舍入将产生四位整数时提前升单位，例如 `999.5 MB → 0.98 GB`。不截断或封顶采样值，颜色按未缩写的 CPU 计算；tooltip 与面板保留明细格式。
+
+验收覆盖 `—`、`9.9% → 10.0%`、`99.9% → 100%`、`999% → 1.00k%`，以及内存的位数与单位切换。面板 CPU 保留一位小数。更新前后检查图标、分隔符、单位右边缘、内存指标标签、趋势图和列边界的位置，不要求不同字符数的文本左边缘重合。
 
 ## 采集结构
 
 ```text
 Professional layout
   ├─ professional-status：机器、分支、agents、Git Graph
-  ├─ resource-monitor View：footer + Popover + 单一定时器
-  │    ├─ collect.js：每台机器的请求合并、CPU 基线、监听缓存
-  │    ├─ herdr.exec → herdr-resource-sample → 一份 JSON
-  │    ├─ model.js：进程身份、归属、去重、汇总、未知值
-  │    └─ tree.js：展示树、组合筛选、虚拟行
-  └─ professional-status hint：命令面板提示
+  ├─ professional-status hint：命令面板提示
+  └─ resource-monitor View：最右侧 footer + Popover + 单一定时器
+       ├─ collect.js：每台机器的请求合并、CPU 基线、监听缓存
+       ├─ herdr.exec → herdr-resource-sample → 一份 JSON
+       ├─ model.js：进程身份、归属、去重、汇总、未知值
+       └─ tree.js：展示树、组合筛选、虚拟行
 ```
 
 footer 和弹层共用一个 Mod 实例，无共享 store 或第二个采样器。系统调用不在 render 或行渲染回调中执行。helper 是一次性命令，不驻留、不启动服务、不执行子命令。
@@ -45,7 +55,7 @@ footer 和弹层共用一个 Mod 实例，无共享 store 或第二个采样器�
 - 活跃应用每 1000 ms 采集 CPU/内存。同机请求合并，全局最多并发两台机器，较旧快照优先。单次 exec 超时 2000 ms。
 - 应用失活不启动新采样，清除 CPU 基线和监听调度时间，拒绝在途迟到结果；恢复后的首份 CPU 为未知。
 - System 只在弹层打开且该范围被选中时采集。关闭按钮、Esc 和 Popover dismissal 都恢复 Herdr；关闭后保留 footer 的受管采样。范围切换清除旧基线、监听缓存及全机展示缓存，拒绝旧范围在途结果。
-- 只在弹层 Ports 页可见，或 Tree 页可见且 Ports 开启时采集监听，每 5000 ms 一次，范围始终跟随选择器。切到 Processes、关闭 Tree 的 Ports 开关或关闭弹层后暂停端口采集。搜索不改变采集范围或扫描调度。
+- 只在弹层 Ports 或 Tree 页可见时采集监听，每 5000 ms 一次，范围始终跟随选择器。Tree 默认启用监听显示与搜索，不设开关。切到 Processes 或关闭弹层后暂停端口采集。搜索不改变采集范围或扫描调度。
 - 连接、终端根或机器身份改变时作废旧基线。旧连接、已移除目标、已关闭 View 的迟到结果不合入新状态。
 - View 销毁后取消 timer，释放 FocusHandle、滚动句柄和历史。不会结束用户终端。
 - footer 和弹层按实际显示值比较；数值未变时，不因新快照时间推进主动重绘。CPU、行内容、状态或趋势改变时刷新。footer 悬停时更新 tooltip。

@@ -46,7 +46,9 @@ oh-my-herdr/install.sh --switch
 | `⌘T` | 新建终端 |
 | `⌘⇧P` | 命令面板 |
 
-点底部 CPU 或内存读数打开 Resource Manager。上方 `Herdr / System` 同时控制 Tree、Processes 和 Ports：Herdr 只看受管终端及 OS 后代，System 查看各机器的全机进程和 TCP 监听。每次打开默认 Herdr；切换范围保留过滤词与排序，切换页签保留范围。Tree 顶部图标可展开全部、收起全部、定位当前 pane；定位会返回 Herdr Tree、清空过滤并滚动到目标行。直接输入过滤，空格分词，第一次 Esc 清空，第二次关闭。Tree 的 Ports 开关仅控制监听行显示，搜索不扩大范围。底部读数始终是 Herdr 受管资源；System 摘要是可读进程合计，不是系统已用内存。权限不足显示部分覆盖，关闭弹层后停止全机采集。
+点底部最右侧 CPU 或内存读数打开 Task Manager。页签与 `Herdr / System` 同行，选择器统一控制 Tree、Processes 和 Ports：Herdr 只看受管终端及 OS 后代，System 查看各机器的全机进程和 TCP 监听。每次打开返回 Herdr Tree，自动定位并展开当前 pane；切换范围保留过滤词与排序，切换页签保留范围。Tree 顶部图标可展开全部、收起全部、定位当前 pane；定位按钮也会返回 Herdr Tree、清空过滤、展开目标及祖先并滚动到目标行。摘要下方不显示常驻说明，机器、采样与覆盖状态可悬停查看。直接输入过滤，空格分词，第一次 Esc 清空，第二次关闭。Tree 默认显示监听端口；Tree 和 Ports 页每 5 秒采集监听，Processes 或关闭弹层时停止扫描。搜索不扩大范围。底部读数始终是 Herdr 受管资源；System 摘要是可读进程合计，不是系统已用内存。关闭弹层后停止全机采集。
+
+footer 数值最多三位数字，不计小数点、百分号与单位；例如 `10.0%`、`100%`、`1.60k%` 和 `12.4 GB`。`k%` 表示千个百分点，CPU 100% 仍代表一个核。面板和悬停提示保留明细格式。footer 使用紧凑的固定宽度槽，等宽数值左对齐并紧贴图标，更新时不推动相邻元素。Task Manager 摘要左侧分两行显示 CPU、Memory，Tree 的内存趋势图填满右侧剩余宽度；实际内存指标（如 Footprint）保留在摘要 tooltip。
 
 `⌘W` 会结束 pane 里的终端。`⌘⇧W` 原有的关闭 pane 绑定已被移除。
 

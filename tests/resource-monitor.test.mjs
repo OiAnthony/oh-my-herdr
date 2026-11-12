@@ -138,16 +138,15 @@ test("PID and port keywords match one process, accept substrings and retain its 
   });
   const snapshots = new Map([["", snap]]);
   const nodes = build([terminal("t1", 10, placed)], [], { snapshots });
-  const tree = buildResourceTree(nodes, { snapshots, showPorts: true, query: "12 8080" });
+  const tree = buildResourceTree(nodes, { query: "12 8080" });
   const match = leaf(tree, "t1");
   assert.deepEqual(match.visibleProcesses.map(process => process.pid), [10, 11, 12]);
   assert.deepEqual(match.visiblePorts.map(port => port.port), [8080]);
   assert.equal(match.memory, 40);
-  assert.deepEqual(buildResourceTree(nodes, { snapshots, showPorts: true, query: "13 8080" }), []);
-  assert.deepEqual(leaf(buildResourceTree(nodes, { snapshots, showPorts: true, query: "808" }), "t1")
+  assert.deepEqual(buildResourceTree(nodes, { query: "13 8080" }), []);
+  assert.deepEqual(leaf(buildResourceTree(nodes, { query: "808" }), "t1")
     .visiblePorts.map(port => port.port), [8080]);
-  assert.deepEqual(buildResourceTree(nodes, { snapshots, query: "8080" }), []);
-  assert.deepEqual(buildResourceTree(nodes, { snapshots, showPorts: true, query: "not-present 8080" }), []);
+  assert.deepEqual(buildResourceTree(nodes, { query: "not-present 8080" }), []);
   const expanded = new Set(all(tree).map(node => node.id));
   assert.equal(resourceRows(tree, { expanded }).filter(row => row.type === "port").length, 1);
   assert.equal(resourceRows(tree).length, 1);
@@ -160,8 +159,8 @@ test("port searches never expand the selected managed process scope", () => {
   })]]);
   const nodes = build([terminal("t1", 10, placed)], [], { snapshots });
   const before = structuredClone(nodes);
-  assert.deepEqual(buildResourceTree(nodes, { snapshots, showPorts: true, query: "8080" }), []);
-  assert.deepEqual(buildResourceTree(nodes, { snapshots, showPorts: true, query: "outside-server 8080" }), []);
+  assert.deepEqual(buildResourceTree(nodes, { query: "8080" }), []);
+  assert.deepEqual(buildResourceTree(nodes, { query: "outside-server 8080" }), []);
   assert.deepEqual(nodes, before);
 });
 
@@ -171,7 +170,7 @@ test("port results keep equal remote PIDs separate and never duplicate managed l
   const snapshots = new Map([["", snapshot([process(10)], { listeners: channel([listener]) })],
     ["remote", snapshot([process(10)], { machine: "remote", listeners: channel([listener]) })]]);
   const nodes = build([terminal("t1", 10, placed)], [], { snapshots, spaces });
-  const tree = buildResourceTree(nodes, { snapshots, showPorts: true, query: "8080" });
+  const tree = buildResourceTree(nodes, { query: "8080" });
   assert.equal(all(tree).some(node => node.kind === "process-owner"), false);
   assert.equal(all(tree).some(node => node.machine === "remote" && node.ports.length), false);
   assert.equal(leaf(tree, "t1").visiblePorts.length, 1);
@@ -550,18 +549,17 @@ test("system topology retains missing parents, self cycles, longer cycles and de
   assert.equal(conflict[0].historyValid, false);
 });
 
-test("system search retains OS ancestors, never duplicates process rows and ports only appear when enabled", () => {
+test("system port search retains OS ancestors and never duplicates process or listener rows", () => {
   const listener = { pid: 12, family: "ipv4", protocol: "tcp", address: "127.0.0.1", port: 8080 };
   const snapshots = new Map([["", snapshot([process(10), process(11, 10), process(12, 11), process(13, 10)], { listeners: channel([listener]) })]]);
   const nodes = buildSystemResources({ snapshots, now: at });
-  const filtered = buildResourceTree(nodes, { query: "12 8080", showPorts: true });
+  const filtered = buildResourceTree(nodes, { query: "12 8080" });
   assert.deepEqual(all(filtered).filter(node => node.kind === "system-process").map(node => node.pid), [10, 11, 12]);
   const expanded = new Set(all(nodes).map(node => node.id));
   assert.equal(resourceRows(filtered, { expanded }).filter(row => row.type === "port").length, 1);
-  assert.equal(resourceRows(buildResourceTree(nodes), { expanded }).filter(row => row.type === "port").length, 0);
-  assert.equal(resourceRows(buildResourceTree(nodes, { showPorts: true }), { expanded }).filter(row => row.type === "port").length, 1);
-  assert.deepEqual(buildResourceTree(nodes, { query: "8080" }), []);
-  assert.deepEqual(buildResourceTree(nodes, { query: "13 8080", showPorts: true }), []);
+  assert.equal(resourceRows(buildResourceTree(nodes), { expanded }).filter(row => row.type === "port").length, 1);
+  assert.deepEqual(all(buildResourceTree(nodes, { query: "8080" })).filter(node => node.kind === "system-process").map(node => node.pid), [10, 11, 12]);
+  assert.deepEqual(buildResourceTree(nodes, { query: "13 8080" }), []);
 });
 
 test("system unknown, stale and failed metrics never become valid sums or history", () => {

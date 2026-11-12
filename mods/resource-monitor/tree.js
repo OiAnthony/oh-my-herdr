@@ -12,7 +12,7 @@ const processFields = process => [process.name, process.pid, process.ppid, proce
   cpu(process.cpu), bytes(process.memory), `RSS ${bytes(process.resident)}`];
 const portFields = port => [endpoint(port), "TCP LISTEN", port.binding];
 
-export function buildResourceTree(nodes, { query = "", showPorts = false } = {}) {
+export function buildResourceTree(nodes, { query = "" } = {}) {
   const words = terms(query);
   function project(source, path = [], pane = null) {
     if (source.kind === "pane" && source.children.length === 1 && source.children[0].kind === "terminal") {
@@ -22,7 +22,7 @@ export function buildResourceTree(nodes, { query = "", showPorts = false } = {})
     const context = [...path, ...labels(node)];
     const children = node.children.flatMap(child => child.kind === "tab" ? child.children : [child])
       .map(child => project(child, context)).filter(Boolean);
-    if (!words.length) return { ...node, children, visiblePorts: showPorts ? node.ports : [] };
+    if (!words.length) return { ...node, children, visiblePorts: node.ports };
     const fresh = !node.stale && ["ready", "partial"].includes(node.processState);
     const own = matches([...context, cpu(fresh ? node.cpu : null), bytes(fresh ? node.memory : null),
       node.metric, node.message, node.stale ? "stale" : ""], words);
@@ -32,8 +32,8 @@ export function buildResourceTree(nodes, { query = "", showPorts = false } = {})
     const matching = node.processes.filter(process => {
       const fields = [...context, ...processFields(process), node.metric, node.message, node.stale ? "stale" : ""];
       const processMatches = matches(fields, words);
-      const ports = showPorts ? node.ports.filter(port => port.pids.includes(process.pid)
-        && (processMatches || matches([...fields, ...portFields(port)], words))) : [];
+      const ports = node.ports.filter(port => port.pids.includes(process.pid)
+        && (processMatches || matches([...fields, ...portFields(port)], words)));
       ports.forEach(port => visiblePorts.add(port));
       return processMatches || ports.length;
     });
@@ -48,7 +48,7 @@ export function buildResourceTree(nodes, { query = "", showPorts = false } = {})
     }
     const details = matches([...context, node.directChildren === null ? "Child counts unknown"
       : `${node.directChildren} children ${node.descendants} descendants`,
-    showPorts ? `${node.ports.length} listeners` : "", node.message], words);
+    `${node.ports.length} listeners`, node.message], words);
     if (!own && !details && !matching.length && !children.length) return null;
     return { ...node, children, showDetails: Boolean(own || details || matching.length),
       visibleProcesses: node.processes.filter(process => visible.has(process.pid)),

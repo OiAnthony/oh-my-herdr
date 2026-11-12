@@ -13,9 +13,9 @@ Professional 是 Herdr Desktop 的完整工作区布局：左侧管理 Spaces �
 - 中间显示当前 tab 的 panes。pane header 高 30 px，保留状态、分割、缩放和关闭操作；diff pane 的标题是相对路径。内容区 padding 和相邻区域间距均为 8 px。
 - Files 和 Changes 共用右侧面板，初始宽 368 px，范围 280 至 900 px，默认隐藏。同一时刻只显示其中一页。
 - Git Graph 是独立底部面板，初始高 420 px，范围 240 至 800 px，默认隐藏；可以与右侧 Files / Changes 同时显示。
-- 底部状态栏高 28 px，依次显示机器、分支、Agents 摘要、Git Graph 入口、CPU / 内存，以及最右侧原生命令面板提示。资源槽宽 164 px，命令提示槽宽 130 px。
+- 底部状态栏高 28 px，依次显示机器、分支、Agents 摘要、Git Graph 入口、原生命令面板提示，以及最右侧 Task Manager CPU / 内存。命令提示槽宽 130 px，资源槽宽 188 px。
 
-Resource Manager 从底部读数向上打开，宽度上限 416 px，高度上限 640 px，同时不超过窗口宽的 95% 和高的 85%。`Herdr / System` 统一控制三个页签，每次打开默认 Herdr；切换范围保留关键词与排序，切换页签保留范围。Herdr Tree 按 Space、Pane、OS 子进程分层；System Tree 按机器、OS 父子进程分层。Processes 是 Name / PID / CPU / Memory 平表，Ports 是 Endpoint / Process / PID 平表。内存用 1024 进位显示，CPU 低于 100% 时保留一位小数，达到 100% 后显示整数；100% 代表一个核。
+Task Manager 从底部读数向上打开，宽度上限 416 px，高度上限 640 px，同时不超过窗口宽的 95% 和高的 85%。`Herdr / System` 统一控制三个页签，每次打开默认 Herdr；切换范围保留关键词与排序，切换页签保留范围。Herdr Tree 按 Space、Pane、OS 子进程分层；System Tree 按机器、OS 父子进程分层。Processes 是 Name / PID / CPU / Memory 平表，Ports 是 Endpoint / Process / PID 平表。footer 数值最多三位数字，小数点、百分号与单位不计入：CPU 低于 100% 保留一位小数，三位整数容不下时用 `k%` 等十进制缩写；内存按 1024 换算单位并调整小数位，例如 `1.24 GB / 12.4 GB / 124 GB`。面板保留明细精度，CPU 100% 代表一个核。footer、摘要和表格数值使用固定宽度槽、等宽字体与右对齐，位数或内存单位变化不得推动图标、分隔符及相邻列。
 
 ## How it behaves
 
@@ -61,7 +61,7 @@ Git Graph 支持提交、checkout、fetch、push 等写入或网络操作。查�
 
 弹层直接键入即可搜索，空格分词，全部词须命中同一行或所属路径。支持名称、机器、PID / PPID、CPU 和内存等字段。Backspace 删除；第一次 Esc 清空搜索，第二次关闭。方向键导航，Enter 展开或折叠 Tree；切换页面清空搜索。
 
-Tree 的 Ports 默认关闭。开启后与 Ports 页一样，每 5 秒按当前作用域采集 TCP 监听。搜索只过滤，不再隐式扩展到全机。关闭 Ports 保留搜索词、隐藏端口行，只按其他字段匹配；Processes 不采集端口。System 仅在弹层打开时采集全机 CPU 和内存；关闭后恢复受管采集。footer 始终显示 Herdr 受管资源，System 摘要是可读进程合计，不代表主机已用内存。定位当前 pane 会返回 Herdr Tree。
+Tree 默认显示监听端口，没有 Ports 开关。Tree 与 Ports 页每 5 秒按当前作用域采集 TCP 监听，搜索只过滤，不隐式扩展到全机。Processes 不采集端口，关闭弹层也停止扫描。System 仅在弹层打开时采集全机 CPU 和内存；关闭后恢复受管采集。footer 始终显示 Herdr 受管资源，System 摘要是可读进程合计，不代表主机已用内存。定位当前 pane 会返回 Herdr Tree。
 
 采集程序只读，不提权，不读取 argv、环境变量或终端内容，不保存采样历史、不结束进程、不转发端口。首次采样、PID 复用、计数回退、采样间隔过长或机器不可达时保留未知或错误状态。
 
@@ -78,7 +78,7 @@ Tree 的 Ports 默认关闭。开启后与 Ports 页一样，每 5 秒按当前�
 | `open-with` | `props.role: "launcher"` 为右上角主入口；默认角色为应用菜单；`widthTarget` 指定可调整的槽位 |
 | `professional-status` | 机器、分支、Agents 摘要和 Graph 入口；`props.role: "hint"` 为命令面板提示 |
 | `git-graph` | 底部历史图；`props.role` 区分 pane header、diff、菜单、对话框和设置 |
-| `resource-monitor` | 底部读数与 Resource Manager，共享按机器去重的快照 |
+| `resource-monitor` | 最右侧底部读数与 Task Manager，共享按机器去重的快照 |
 
 布局还引用 Herdr 自带的 `workspace-chrome` 与 `spaces`，图标也有内置资源引用。安装前必须用目标应用 home 启动过 Herdr，不能拿一个空目录代替初始化环境。
 
@@ -132,5 +132,5 @@ herdr-app do layout.switch '{"name":"Professional"}'
 - Open With 的设置默认项不打开程序；启动使用正确仓库与机器，不把远程目录交给本机普通应用。失败有明确提示。
 - Graph 能展开、收起和切换 commit；单击文件复用预览，双击固定，固定项不被替换；切换子仓库不改变终端 cwd 或 Changes 目标。
 - Files 的聚焦与隐藏、Changes 的单次切换、Graph 的双次切换符合 300 ms 判定，切换上下文不会执行过期待处理命令。
-- Resource Manager 两页能显示真实采样，搜索、排序、方向键、Enter 与 Esc 按上述规则工作；Ports 关闭时不扫描监听端口，关闭弹层停止端口采集但保留 footer 采样。
+- Task Manager 三页能显示真实采样，搜索、排序、方向键、Enter 与 Esc 按上述规则工作；Tree 默认展示及搜索监听端口，Processes 或关闭弹层时不扫描端口，footer 继续采样。数值位数、未知值和内存单位切换不引起布局水平位移。
 - 使用应用真实截图检查布局；不要把宿主模拟回调、初始加载成功或测试断言写成真实鼠标、键盘和远端验收证明。
