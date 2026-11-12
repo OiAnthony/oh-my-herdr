@@ -36,6 +36,8 @@ The imported runtime folder lacked a LICENSE file, but that absence did not esta
 
 [Icon NOTICE](mods/open-with/icons/NOTICE.txt) contains the detailed source links and modifications. The four installed-app PNGs (Visual Studio Code, Finder, Zed, IntelliJ IDEA) have been removed because no redistribution grant for those extracted files was established. All four application choices, names, bundle IDs and launching behavior remain; they use the existing original neutral `application.svg`. This is explicitly a neutral illustration, not replacement brand artwork. Microsoft's [primary brand guidelines](https://code.visualstudio.com/brand) distinguish the stable brand logo from the application icon and do not license every extracted app resource.
 
+On macOS, the installer now exports these four icons from applications installed on the user's own machine via NSWorkspace, without launching them. PNG files and their index stay in that user's Herdr home under `data/open-with-icons/`, outside the source/package and managed redistribution assets. This local extraction does not establish or claim redistribution permission; absent applications retain the bundled neutral illustration.
+
 Cursor and Sublime Text SVG path data is corroborated against Simple Icons revision **`cd796c98565fc466923fc1128b962e133fa3c612`**, with explicit fills and provenance comments added locally. Full CC0-1.0 legal text is [bundled](mods/open-with/icons/LICENSE.CC0-1.0.txt). Historical retrieval used `develop`; the corroborating revision is not asserted to be the historical download revision. CC0 expressly does not clear trademark, patent or third-party rights. Names/icons identify launch destinations and imply no endorsement.
 
 ## Other preserved exceptions

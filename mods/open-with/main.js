@@ -7,6 +7,7 @@ import { appHome, closeOverlay, exec, hc, nextCommand, notify, openOverlay, prop
 import { captureTarget, resolveTarget } from "./context.js";
 import { availableApps, launch, parseApps } from "./apps.js";
 import { hostOf } from "./vscode.js";
+import { withLocalIcons } from "./local-icons.js";
 
 const DEFAULT_KEY = "open-with.default-app";
 const LAUNCHER_PADDING = 10;
@@ -30,7 +31,8 @@ export default class OpenWith extends View {
     cx.spawn(async cx => {
       try {
         const raw = await readTextFile(`${appHome()}/mods/open-with/apps.json`);
-        this.apps = parseApps(raw);
+        const icons = await readTextFile(`${appHome()}/data/open-with-icons/icons.json`);
+        this.apps = withLocalIcons(parseApps(raw), icons === null ? {} : JSON.parse(icons));
         if (!this.launcher) {
           this.apps = availableApps(this.apps, this.target, window()?.platform);
           this.index = this.apps.indexOf(this.defaultApp());

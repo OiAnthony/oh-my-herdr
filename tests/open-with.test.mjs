@@ -88,14 +88,15 @@ test("host lookup reads the new configuration only, and supports a corrected ret
 });
 
 test("remote and non-macOS targets expose only VS Code even when custom apps omit it", () => {
-  const custom = [DEFAULT_APPS[1]];
-  assert.deepEqual(availableApps(custom, { on: "remote" }, "macos"), [DEFAULT_APPS[0]]);
-  assert.deepEqual(availableApps(custom, { on: null }, "linux"), [DEFAULT_APPS[0]]);
+  const custom = [DEFAULT_APPS.find(app => app.id === "finder")];
+  const vscode = DEFAULT_APPS.find(app => app.id === "vscode");
+  assert.deepEqual(availableApps(custom, { on: "remote" }, "macos"), [vscode]);
+  assert.deepEqual(availableApps(custom, { on: null }, "linux"), [vscode]);
   assert.equal(availableApps(custom, { on: null }, "macos"), custom);
 });
 
 test("local bundle apps reject remote targets before any program can run", async () => {
-  await assert.rejects(launch(DEFAULT_APPS[1], { path: "/secret", on: "remote" }, async () => assert.fail("must not execute"), "macos"), /remote path/);
+  await assert.rejects(launch(DEFAULT_APPS.find(app => app.id === "finder"), { path: "/secret", on: "remote" }, async () => assert.fail("must not execute"), "macos"), /remote path/);
 });
 
 test("VS Code launches locally using the remote folder URI, not remote exec", async () => {

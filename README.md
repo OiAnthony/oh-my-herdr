@@ -73,6 +73,8 @@ footer 数值最多三位数字，不计小数点、百分号与单位；例如 
 
 Open With 的应用列表写在 `mods/open-with/apps.json`，每项需要 `id`、`title`，普通应用还需要 macOS `bundleId`，最多 20 项。Core 机器名和 SSH Host 不同时，在 `mods/open-with/hosts.json` 中写 `{"my-machine":"my-ssh-alias"}`，key 是机器名，value 是 SSH Host。
 
+macOS 安装时会从本机已安装的 VS Code、Finder、Zed 和 IntelliJ IDEA 导出图标，缓存到应用目录的 `data/open-with-icons/`。导出资源不进入源码或发布包；未安装的应用保留通用图标，Cursor 和 Sublime Text 保留随包 SVG。个人 `apps.json` 中显式指定的图标优先。重新运行安装器可刷新缓存；卸载会保留该本机缓存。
+
 ## 更新与卸载
 
 更新时进入项目目录重新运行：

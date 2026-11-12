@@ -6,6 +6,7 @@ import { promisify } from "node:util";
 import { homedir } from "node:os";
 import { dirname, isAbsolute, join, posix, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { cacheAppIcons } from "./scripts/cache-app-icons.mjs";
 
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const RECORD = ".oh-my-herdr/installed.json";
@@ -315,7 +316,7 @@ async function transact(home, operations, beforeCommit, guards = []) {
   }
 }
 
-export async function install(home, { sourceRoot = ROOT, beforeCommit } = {}) {
+export async function install(home, { sourceRoot = ROOT, beforeCommit, localIcons = false } = {}) {
   home = resolve(home);
   const bundle = await loadBundle(sourceRoot);
   const record = await readRecord(home);
@@ -342,6 +343,8 @@ export async function install(home, { sourceRoot = ROOT, beforeCommit } = {}) {
   const after = Buffer.from(`${JSON.stringify({ schemaVersion: 2, name: "oh-my-herdr", version: bundle.manifest.version,
     files: Object.fromEntries([...bundle.files].map(([path, file]) => [path, file.sha256])), keybindings: keys.bindings }, null, 2)}\n`);
   if (!record.bytes || !record.bytes.equals(after)) operations.push({ path: RECORD, before: record.bytes, after });
+  // Prepare private artwork before watched Mod files change and reload.
+  if (localIcons) await cacheAppIcons(home);
   await transact(home, operations, beforeCommit, keys.guard ? [keys.guard] : []);
   return { home, files: bundle.files.size };
 }
@@ -462,7 +465,7 @@ export async function main(argv = process.argv.slice(2)) {
   if (!["install", "check", "uninstall"].includes(command) || extra.length || argument?.startsWith("-")) {
     throw new Error("Usage: node oh-my-herdr.mjs install|check|uninstall [app-home] (no force option)");
   }
-  const result = await ({ install, check, uninstall })[command](resolveHome(argument));
+  const result = await ({ install, check, uninstall })[command](resolveHome(argument), command === "install" ? { localIcons: true } : undefined);
   for (const warning of result.warnings ?? []) console.error(`Warning: ${warning}`);
   console.log(`${command}: ${result.home}; ${result.files ?? result.mods} ${command === "check" ? "mods checked" : "owned files"}. No layout was switched.`);
 }
